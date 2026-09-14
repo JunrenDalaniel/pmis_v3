@@ -6,6 +6,7 @@ use App\Filament\Resources\LoanApplicationResource;
 use App\Models\ApplicationStatus;
 use App\Models\LoanApplication;
 use Carbon\Carbon;
+use Filament\Actions\Action;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -99,7 +100,7 @@ class LatestLoanApplicationsWidget extends BaseWidget
                     }),
             ])
             ->actions([
-                Tables\Actions\Action::make('open')
+                Action::make('open')
                     ->label('View')
                     ->icon('heroicon-m-arrow-top-right-on-square')
                     ->url(function (LoanApplication $record): string {
