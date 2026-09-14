@@ -71,8 +71,18 @@ class LoanApplicationResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
+        $nonReleasedStages = [
+            'Initial Assessment',
+            'For Notary',
+            'Notarized',
+            'For BIR', 'For Bir',
+            'BIR Paid', 'Bir Paid',
+            'For ROD', 'For Rod',
+        ];
+
         $query = parent::getEloquentQuery()
             ->where('approval_status', 'Approved')
+            ->whereNotIn('status', $nonReleasedStages)
             ->with(['member', 'branchOffice', 'chattelCollaterals', 'realEstateCollaterals']);
 
         $user = auth()->user();

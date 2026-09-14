@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Resources\DisapprovedLoanResource;
 use App\Filament\Resources\LoanApplicationResource;
 use App\Filament\Widgets\StatsOverviewWidget;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
@@ -53,49 +54,49 @@ class AdminPanelProvider extends PanelProvider
                 NavigationItem::make('Initial Assessment')
                     ->group('Document Tracking Pipeline')
                     ->icon('heroicon-o-clipboard-document-list')
-                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'initial_assessment']))
-                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['Initial Assessment'])->count() ?: null, 'gray')
-                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['initial_assessment', 'Initial Assessment']))
+                    ->url(fn (): string => DisapprovedLoanResource::getUrl('index', ['stage' => 'initial_assessment']))
+                    ->badge(fn () => DisapprovedLoanResource::getEloquentQuery()->whereIn('status', ['Initial Assessment'])->count() ?: null, 'gray')
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.disapproved-loans.index') && in_array(request()->query('stage'), ['initial_assessment', 'Initial Assessment']))
                     ->sort(1),
 
                 NavigationItem::make('For Notary')
                     ->group('Document Tracking Pipeline')
                     ->icon('heroicon-o-pencil-square')
-                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_notary']))
-                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For Notary'])->count() ?: null, 'warning')
-                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_notary', 'For Notary']))
+                    ->url(fn (): string => DisapprovedLoanResource::getUrl('index', ['stage' => 'for_notary']))
+                    ->badge(fn () => DisapprovedLoanResource::getEloquentQuery()->whereIn('status', ['For Notary'])->count() ?: null, 'warning')
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.disapproved-loans.index') && in_array(request()->query('stage'), ['for_notary', 'For Notary']))
                     ->sort(2),
 
                 NavigationItem::make('Notarized')
                     ->group('Document Tracking Pipeline')
                     ->icon('heroicon-o-document-check')
-                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'notarized']))
-                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['Notarized'])->count() ?: null, 'info')
-                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['notarized', 'Notarized']))
+                    ->url(fn (): string => DisapprovedLoanResource::getUrl('index', ['stage' => 'notarized']))
+                    ->badge(fn () => DisapprovedLoanResource::getEloquentQuery()->whereIn('status', ['Notarized'])->count() ?: null, 'info')
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.disapproved-loans.index') && in_array(request()->query('stage'), ['notarized', 'Notarized']))
                     ->sort(3),
 
                 NavigationItem::make('For BIR')
                     ->group('Document Tracking Pipeline')
                     ->icon('heroicon-o-building-office')
-                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_bir']))
-                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For BIR', 'For Bir'])->count() ?: null, 'warning')
-                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_bir', 'For BIR', 'For Bir']))
+                    ->url(fn (): string => DisapprovedLoanResource::getUrl('index', ['stage' => 'for_bir']))
+                    ->badge(fn () => DisapprovedLoanResource::getEloquentQuery()->whereIn('status', ['For BIR', 'For Bir'])->count() ?: null, 'warning')
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.disapproved-loans.index') && in_array(request()->query('stage'), ['for_bir', 'For BIR', 'For Bir']))
                     ->sort(4),
 
                 NavigationItem::make('BIR Paid')
                     ->group('Document Tracking Pipeline')
                     ->icon('heroicon-o-banknotes')
-                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'bir_paid']))
-                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['BIR Paid', 'Bir Paid'])->count() ?: null, 'info')
-                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['bir_paid', 'BIR Paid', 'Bir Paid']))
+                    ->url(fn (): string => DisapprovedLoanResource::getUrl('index', ['stage' => 'bir_paid']))
+                    ->badge(fn () => DisapprovedLoanResource::getEloquentQuery()->whereIn('status', ['BIR Paid', 'Bir Paid'])->count() ?: null, 'info')
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.disapproved-loans.index') && in_array(request()->query('stage'), ['bir_paid', 'BIR Paid', 'Bir Paid']))
                     ->sort(5),
 
                 NavigationItem::make('For ROD')
                     ->group('Document Tracking Pipeline')
                     ->icon('heroicon-o-building-library')
-                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_rod']))
-                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For ROD', 'For Rod'])->count() ?: null, 'warning')
-                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_rod', 'For ROD', 'For Rod']))
+                    ->url(fn (): string => DisapprovedLoanResource::getUrl('index', ['stage' => 'for_rod']))
+                    ->badge(fn () => DisapprovedLoanResource::getEloquentQuery()->whereIn('status', ['For ROD', 'For Rod'])->count() ?: null, 'warning')
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.disapproved-loans.index') && in_array(request()->query('stage'), ['for_rod', 'For ROD', 'For Rod']))
                     ->sort(6),
 
                 NavigationItem::make('ROD Paid')

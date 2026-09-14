@@ -44,34 +44,31 @@ class DisapprovedLoanResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
+        $nonReleasedStages = [
+            'Initial Assessment',
+            'For Notary',
+            'Notarized',
+            'For BIR', 'For Bir',
+            'BIR Paid', 'Bir Paid',
+            'For ROD', 'For Rod',
+        ];
+
         $query = parent::getEloquentQuery()
-            ->where('approval_status', 'Disapproved')
+            ->where(function ($q) use ($nonReleasedStages) {
+                $q->where('approval_status', 'Disapproved')
+                  ->orWhere(function ($sub) use ($nonReleasedStages) {
+                      $sub->where('approval_status', 'Approved')
+                          ->whereIn('status', $nonReleasedStages);
+                  });
+            })
             ->with(['member', 'branchOffice', 'chattelCollaterals', 'realEstateCollaterals']);
 
         $user = auth()->user();
-        if (! $user) {
-            return $query;
-        }
-
-        if ($user->hasRole(['super_admin', 'Super Admin']) || in_array($user->role?->code, ['super_admin', 'operation_division_manager', 'chief_executive_officer', 'audit', 'compliance_specialist', 'appraiser'])) {
-            return $query;
-        }
-
-        if ($user->hasRole(['Area Manager 1 (AM1)', 'area_manager_1']) || $user->role?->code === 'area_manager_1') {
-            return $query->whereHas('branchOffice', fn ($b) => $b->where('area', 'like', '%1%'));
-        }
-        if ($user->hasRole(['Area Manager 2 (AM2)', 'area_manager_2']) || $user->role?->code === 'area_manager_2') {
-            return $query->whereHas('branchOffice', fn ($b) => $b->where('area', 'like', '%2%'));
-        }
-        if ($user->hasRole(['Area Manager 3 (AM3)', 'area_manager_3']) || $user->role?->code === 'area_manager_3') {
-            return $query->whereHas('branchOffice', fn ($b) => $b->where('area', 'like', '%3%'));
-        }
-
-        if ($user->branch_office_id !== null) {
-            $query->where('branch_office_id', $user->branch_office_id);
-        } else {
-            // No branch assigned — return no results to prevent data leak
-            return $query->whereRaw('1 = 0');
+        if ($user) {
+            $allowedBranches = $user->getAllowedBranchIds();
+            if (is_array($allowedBranches)) {
+                $query->whereIn('branch_office_id', $allowedBranches);
+            }
         }
 
         return $query;
