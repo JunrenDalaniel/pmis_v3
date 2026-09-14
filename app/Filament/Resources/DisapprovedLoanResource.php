@@ -44,23 +44,8 @@ class DisapprovedLoanResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $nonReleasedStages = [
-            'Initial Assessment',
-            'For Notary',
-            'Notarized',
-            'For BIR', 'For Bir',
-            'BIR Paid', 'Bir Paid',
-            'For ROD', 'For Rod',
-        ];
-
         $query = parent::getEloquentQuery()
-            ->where(function ($q) use ($nonReleasedStages) {
-                $q->where('approval_status', 'Disapproved')
-                  ->orWhere(function ($sub) use ($nonReleasedStages) {
-                      $sub->where('approval_status', 'Approved')
-                          ->whereIn('status', $nonReleasedStages);
-                  });
-            })
+            ->where('approval_status', 'Disapproved')
             ->with(['member', 'branchOffice', 'chattelCollaterals', 'realEstateCollaterals']);
 
         $user = auth()->user();
