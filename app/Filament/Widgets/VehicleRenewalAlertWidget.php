@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class VehicleRenewalAlertWidget extends BaseWidget
 {
+    protected static bool $isLazy = false;
+
     protected static ?string $heading = '🚨 Vehicle LTO Registration & Renewal Alerts';
 
     protected static ?int $sort = 5;

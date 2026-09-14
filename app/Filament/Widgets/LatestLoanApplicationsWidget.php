@@ -13,6 +13,8 @@ use Filament\Widgets\TableWidget as BaseWidget;
 
 class LatestLoanApplicationsWidget extends BaseWidget
 {
+    protected static bool $isLazy = false;
+
     protected static ?string $heading = 'Recent Loan Applications & Document Aging';
 
     protected static ?int $sort = 4;

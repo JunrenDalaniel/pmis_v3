@@ -7,6 +7,8 @@ use Filament\Widgets\ChartWidget;
 
 class DocumentPipelineChartWidget extends ChartWidget
 {
+    protected static bool $isLazy = false;
+
     protected ?string $heading = 'Document Tracking Pipeline Distribution';
 
     protected static ?int $sort = 2;

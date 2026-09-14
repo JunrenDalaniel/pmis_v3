@@ -7,6 +7,8 @@ use Filament\Widgets\ChartWidget;
 
 class CollateralDistributionChartWidget extends ChartWidget
 {
+    protected static bool $isLazy = false;
+
     protected ?string $heading = 'Collateral Distribution';
 
     protected static ?int $sort = 3;
