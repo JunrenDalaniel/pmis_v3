@@ -51,21 +51,13 @@ class AdminPanelProvider extends PanelProvider
                     ->collapsed(),
             ])
             ->navigationItems([
-                NavigationItem::make('Initial Assessment')
-                    ->group('Document Tracking Pipeline')
-                    ->icon('heroicon-o-clipboard-document-list')
-                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'initial_assessment']))
-                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['Initial Assessment'])->count() ?: null, 'gray')
-                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['initial_assessment', 'Initial Assessment']))
-                    ->sort(1),
-
                 NavigationItem::make('For Notary')
                     ->group('Document Tracking Pipeline')
                     ->icon('heroicon-o-pencil-square')
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_notary']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For Notary'])->count() ?: null, 'warning')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_notary', 'For Notary']))
-                    ->sort(2),
+                    ->sort(1),
 
                 NavigationItem::make('Notarized')
                     ->group('Document Tracking Pipeline')
@@ -73,7 +65,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'notarized']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['Notarized'])->count() ?: null, 'info')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['notarized', 'Notarized']))
-                    ->sort(3),
+                    ->sort(2),
 
                 NavigationItem::make('For BIR')
                     ->group('Document Tracking Pipeline')
@@ -81,7 +73,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_bir']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For BIR', 'For Bir'])->count() ?: null, 'warning')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_bir', 'For BIR', 'For Bir']))
-                    ->sort(4),
+                    ->sort(3),
 
                 NavigationItem::make('BIR Paid')
                     ->group('Document Tracking Pipeline')
@@ -89,7 +81,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'bir_paid']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['BIR Paid', 'Bir Paid'])->count() ?: null, 'info')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['bir_paid', 'BIR Paid', 'Bir Paid']))
-                    ->sort(5),
+                    ->sort(4),
 
                 NavigationItem::make('For ROD')
                     ->group('Document Tracking Pipeline')
@@ -97,7 +89,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_rod']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For ROD', 'For Rod'])->count() ?: null, 'warning')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_rod', 'For ROD', 'For Rod']))
-                    ->sort(6),
+                    ->sort(5),
 
                 NavigationItem::make('ROD Paid')
                     ->group('Document Tracking Pipeline')
@@ -105,7 +97,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'rod_paid']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['ROD Paid', 'Rod Paid'])->count() ?: null, 'info')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['rod_paid', 'ROD Paid', 'Rod Paid']))
-                    ->sort(7),
+                    ->sort(6),
 
                 NavigationItem::make('For LTO')
                     ->group('Document Tracking Pipeline')
@@ -113,7 +105,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_lto']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For LTO', 'For Lto'])->count() ?: null, 'warning')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_lto', 'For LTO', 'For Lto']))
-                    ->sort(8),
+                    ->sort(7),
 
                 NavigationItem::make('Encumbered')
                     ->group('Document Tracking Pipeline')
@@ -121,7 +113,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'encumbered']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['Encumbered'])->count() ?: null, 'success')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['encumbered', 'Encumbered']))
-                    ->sort(9),
+                    ->sort(8),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
