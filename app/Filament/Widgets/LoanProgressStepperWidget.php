@@ -17,6 +17,12 @@ class LoanProgressStepperWidget extends Widget
 
     protected int | string | array $columnSpan = 'full';
 
+    public static function canView(): bool
+    {
+        // Only display on Edit pages with a record, never on the Dashboard
+        return ! request()->routeIs('filament.admin.pages.dashboard');
+    }
+
     public function getStages(): array
     {
         $allStages = [
