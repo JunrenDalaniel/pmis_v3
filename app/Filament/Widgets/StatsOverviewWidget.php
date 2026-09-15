@@ -34,32 +34,45 @@ class StatsOverviewWidget extends BaseWidget
             return '₱' . number_format($amt, 0);
         };
 
-        // 1. Approved Loans (Amount & Count with REM & CM breakdown)
+        // Reusable filters for Collateral Types (CM vs REM)
+        $filterCm = fn ($q) => $q->where(function ($sub) {
+            $sub->where('collateral_type', 'like', '%chattel%')
+                ->orWhere('collateral_type', 'like', '%cm%');
+        });
+
+        $filterRem = fn ($q) => $q->where(function ($sub) {
+            $sub->where('collateral_type', 'like', '%real%')
+                ->orWhere('collateral_type', 'like', '%rem%');
+        });
+
+        // 1. Approved Loans (Amount & Count with CM & REM breakdown)
         $approvedQuery = (clone $baseQuery)->where('approval_status', 'Approved');
         $approvedCount = (clone $approvedQuery)->count();
         $approvedSum   = (clone $approvedQuery)->sum('requested_amount');
-        $appRemCount   = (clone $approvedQuery)->where('collateral_type', 'like', '%real%')->count();
-        $appRemSum     = (clone $approvedQuery)->where('collateral_type', 'like', '%real%')->sum('requested_amount');
-        $appCmCount    = (clone $approvedQuery)->where('collateral_type', 'like', '%chattel%')->count();
-        $appCmSum      = (clone $approvedQuery)->where('collateral_type', 'like', '%chattel%')->sum('requested_amount');
+        $appCmCount    = $filterCm(clone $approvedQuery)->count();
+        $appCmSum      = $filterCm(clone $approvedQuery)->sum('requested_amount');
+        $appRemCount   = $filterRem(clone $approvedQuery)->count();
+        $appRemSum     = $filterRem(clone $approvedQuery)->sum('requested_amount');
 
-        // 2. Disapproved Loans (Amount & Count with REM & CM breakdown)
+        // 2. Disapproved Loans (Amount & Count with CM & REM breakdown)
         $disapprovedQuery = (clone $baseQuery)->where('approval_status', 'Disapproved');
         $disapprovedCount = (clone $disapprovedQuery)->count();
         $disapprovedSum   = (clone $disapprovedQuery)->sum('requested_amount');
-        $disRemCount      = (clone $disapprovedQuery)->where('collateral_type', 'like', '%real%')->count();
-        $disRemSum        = (clone $disapprovedQuery)->where('collateral_type', 'like', '%real%')->sum('requested_amount');
-        $disCmCount       = (clone $disapprovedQuery)->where('collateral_type', 'like', '%chattel%')->count();
-        $disCmSum         = (clone $disapprovedQuery)->where('collateral_type', 'like', '%chattel%')->sum('requested_amount');
+        $disCmCount       = $filterCm(clone $disapprovedQuery)->count();
+        $disCmSum         = $filterCm(clone $disapprovedQuery)->sum('requested_amount');
+        $disRemCount      = $filterRem(clone $disapprovedQuery)->count();
+        $disRemSum        = $filterRem(clone $disapprovedQuery)->sum('requested_amount');
 
-        // 3. Pending Approvals
+        // 3. Pending Approvals (Count & Amount with CM & REM breakdown)
         $pendingQuery = (clone $baseQuery)->where('approval_status', 'Pending Approval');
         $pendingCount = (clone $pendingQuery)->count();
         $pendingSum   = (clone $pendingQuery)->sum('requested_amount');
-        $penRemCount  = (clone $pendingQuery)->where('collateral_type', 'like', '%real%')->count();
-        $penCmCount   = (clone $pendingQuery)->where('collateral_type', 'like', '%chattel%')->count();
+        $penCmCount   = $filterCm(clone $pendingQuery)->count();
+        $penCmSum     = $filterCm(clone $pendingQuery)->sum('requested_amount');
+        $penRemCount  = $filterRem(clone $pendingQuery)->count();
+        $penRemSum    = $filterRem(clone $pendingQuery)->sum('requested_amount');
 
-        // 4. On-Process Records (Active in Document Pipeline)
+        // 4. On-Process Records (Active in Document Pipeline with CM & REM breakdown)
         $onProcessStages = [
             'For Notary', 'Notarized', 'For BIR', 'For Bir',
             'BIR Paid', 'Bir Paid', 'For ROD', 'For Rod',
@@ -71,47 +84,60 @@ class StatsOverviewWidget extends BaseWidget
             ->whereIn('status', $onProcessStages);
         $onProcessCount = (clone $onProcessQuery)->count();
         $onProcessSum   = (clone $onProcessQuery)->sum('requested_amount');
+        $opCmCount      = $filterCm(clone $onProcessQuery)->count();
+        $opCmSum        = $filterCm(clone $onProcessQuery)->sum('requested_amount');
+        $opRemCount     = $filterRem(clone $onProcessQuery)->count();
+        $opRemSum       = $filterRem(clone $onProcessQuery)->sum('requested_amount');
 
-        // 5. Encumbered Records
+        // 5. Encumbered Records (Completed & Secured with CM & REM breakdown)
         $encumberedQuery = (clone $baseQuery)->where('status', 'Encumbered');
         $encumberedCount = (clone $encumberedQuery)->count();
         $encumberedSum   = (clone $encumberedQuery)->sum('requested_amount');
+        $encCmCount      = $filterCm(clone $encumberedQuery)->count();
+        $encCmSum        = $filterCm(clone $encumberedQuery)->sum('requested_amount');
+        $encRemCount     = $filterRem(clone $encumberedQuery)->count();
+        $encRemSum       = $filterRem(clone $encumberedQuery)->sum('requested_amount');
 
-        // 6. With Deficiency Records
+        // 6. With Deficiency Records (Internal & External with CM & REM breakdown)
         $deficiencyQuery = (clone $baseQuery)
             ->whereIn('sub_status', ['internal_deficiency', 'external_deficiency']);
         $deficiencyCount = (clone $deficiencyQuery)->count();
-        $internalCount   = (clone $deficiencyQuery)->where('sub_status', 'internal_deficiency')->count();
-        $externalCount   = (clone $deficiencyQuery)->where('sub_status', 'external_deficiency')->count();
+        $deficiencySum   = (clone $deficiencyQuery)->sum('requested_amount');
+        $defCmCount      = $filterCm(clone $deficiencyQuery)->count();
+        $defCmSum        = $filterCm(clone $deficiencyQuery)->sum('requested_amount');
+        $defRemCount     = $filterRem(clone $deficiencyQuery)->count();
+        $defRemSum       = $filterRem(clone $deficiencyQuery)->sum('requested_amount');
+
+        $recordLabel = fn (int $c) => number_format($c) . ' ' . ($c === 1 ? 'Record' : 'Records');
 
         return [
             Stat::make('Approved Loans', '₱' . number_format($approvedSum, 2))
-                ->description("{$approvedCount} Loans • REM: {$appRemCount} (" . $formatShort($appRemSum) . ") | CM: {$appCmCount} (" . $formatShort($appCmSum) . ")")
+                ->description("{$approvedCount} " . ($approvedCount === 1 ? 'Loan' : 'Loans') . " • CM: {$appCmCount} (" . $formatShort($appCmSum) . ") | REM: {$appRemCount} (" . $formatShort($appRemSum) . ")")
                 ->descriptionIcon('heroicon-m-check-badge')
                 ->color('success'),
 
             Stat::make('Disapproved Loans', '₱' . number_format($disapprovedSum, 2))
-                ->description("{$disapprovedCount} Loans • REM: {$disRemCount} (" . $formatShort($disRemSum) . ") | CM: {$disCmCount} (" . $formatShort($disCmSum) . ")")
+                ->description("{$disapprovedCount} " . ($disapprovedCount === 1 ? 'Loan' : 'Loans') . " • CM: {$disCmCount} (" . $formatShort($disCmSum) . ") | REM: {$disRemCount} (" . $formatShort($disRemSum) . ")")
                 ->descriptionIcon('heroicon-m-x-circle')
                 ->color('danger'),
 
-            Stat::make('Pending Approval', (string) $pendingCount . ' Records')
-                ->description($formatShort($pendingSum) . " Queue • REM: {$penRemCount} | CM: {$penCmCount}")
+            Stat::make('Pending Approval', $recordLabel($pendingCount))
+                ->description("CM: {$penCmCount} (" . $formatShort($penCmSum) . ") | REM: {$penRemCount} (" . $formatShort($penRemSum) . ")")
                 ->descriptionIcon('heroicon-m-clock')
                 ->color($pendingCount > 0 ? 'warning' : 'gray'),
 
-            Stat::make('On Process Records', (string) $onProcessCount . ' Records')
-                ->description($formatShort($onProcessSum) . ' In Document Pipeline')
+            Stat::make('On Process Records', $recordLabel($onProcessCount))
+                ->description("CM: {$opCmCount} (" . $formatShort($opCmSum) . ") | REM: {$opRemCount} (" . $formatShort($opRemSum) . ")")
                 ->descriptionIcon('heroicon-m-arrow-path')
                 ->color('info'),
 
-            Stat::make('Encumbered Records', (string) $encumberedCount . ' Records')
-                ->description($formatShort($encumberedSum) . ' 100% Completed & Secured')
+            Stat::make('Encumbered Records', $recordLabel($encumberedCount))
+                ->description("CM: {$encCmCount} (" . $formatShort($encCmSum) . ") | REM: {$encRemCount} (" . $formatShort($encRemSum) . ")")
                 ->descriptionIcon('heroicon-m-shield-check')
                 ->color('success'),
 
-            Stat::make('With Deficiency', (string) $deficiencyCount . ' Records')
-                ->description($deficiencyCount > 0 ? "{$internalCount} Internal • {$externalCount} External Flag" : 'No Deficiencies')
+            Stat::make('With Deficiency', $recordLabel($deficiencyCount))
+                ->description("CM: {$defCmCount} (" . $formatShort($defCmSum) . ") | REM: {$defRemCount} (" . $formatShort($defRemSum) . ")")
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->color($deficiencyCount > 0 ? 'danger' : 'success'),
         ];
