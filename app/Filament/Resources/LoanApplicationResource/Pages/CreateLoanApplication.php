@@ -11,6 +11,11 @@ class CreateLoanApplication extends CreateRecord
 {
     protected static string $resource = LoanApplicationResource::class;
 
+    public function getTitle(): string
+    {
+        return 'New Mortgage Application';
+    }
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['approval_status'] = 'Pending Approval';
