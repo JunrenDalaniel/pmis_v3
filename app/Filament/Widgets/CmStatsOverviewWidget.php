@@ -21,8 +21,9 @@ class CmStatsOverviewWidget extends BaseWidget
         $user = auth()->user();
         $allowed = $user?->getAllowedBranchIds();
 
-        // Base scoped query for Chattel Mortgage (CM)
+        // Base scoped query for Chattel Mortgage (CM) - Approved / Released loans only
         $baseQuery = LoanApplication::query()
+            ->where('approval_status', 'Approved')
             ->where(function ($sub) {
                 $sub->where('collateral_type', 'like', '%chattel%')
                     ->orWhere('collateral_type', 'like', '%cm%');

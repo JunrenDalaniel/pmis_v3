@@ -21,8 +21,9 @@ class RemStatsOverviewWidget extends BaseWidget
         $user = auth()->user();
         $allowed = $user?->getAllowedBranchIds();
 
-        // Base scoped query for Real Estate Mortgage (REM)
+        // Base scoped query for Real Estate Mortgage (REM) - Approved / Released loans only
         $baseQuery = LoanApplication::query()
+            ->where('approval_status', 'Approved')
             ->where(function ($sub) {
                 $sub->where('collateral_type', 'like', '%real%')
                     ->orWhere('collateral_type', 'like', '%rem%');
