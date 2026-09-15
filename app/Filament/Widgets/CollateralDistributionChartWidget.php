@@ -11,7 +11,7 @@ class CollateralDistributionChartWidget extends ChartWidget
 
     protected ?string $heading = 'Collateral Distribution';
 
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 5;
 
     protected ?string $maxHeight = '280px';
 

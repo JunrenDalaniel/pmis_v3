@@ -17,7 +17,7 @@ class VehicleRenewalAlertWidget extends BaseWidget
 
     protected static ?string $heading = '🚨 Vehicle LTO Registration & Renewal Alerts';
 
-    protected static ?int $sort = 5;
+    protected static ?int $sort = 7;
 
     protected int | string | array $columnSpan = 'full';
 

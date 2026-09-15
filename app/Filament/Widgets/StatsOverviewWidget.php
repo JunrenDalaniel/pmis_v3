@@ -12,6 +12,10 @@ class StatsOverviewWidget extends BaseWidget
 
     protected static ?int $sort = 1;
 
+    protected ?string $heading = '📊 Executive Loan Overview';
+
+    protected ?string $description = 'Summary of approved, disapproved, and pending loan applications';
+
     protected function getStats(): array
     {
         $user = auth()->user();
@@ -72,42 +76,6 @@ class StatsOverviewWidget extends BaseWidget
         $penRemCount  = $filterRem(clone $pendingQuery)->count();
         $penRemSum    = $filterRem(clone $pendingQuery)->sum('requested_amount');
 
-        // 4. On-Process Records (Active in Document Pipeline with CM & REM breakdown)
-        $onProcessStages = [
-            'For Notary', 'Notarized', 'For BIR', 'For Bir',
-            'BIR Paid', 'Bir Paid', 'For ROD', 'For Rod',
-            'ROD Paid', 'Rod Paid', 'ROD Released', 'For LTO', 'For Lto',
-            "For Assessor's",
-        ];
-        $onProcessQuery = (clone $baseQuery)
-            ->where('approval_status', 'Approved')
-            ->whereIn('status', $onProcessStages);
-        $onProcessCount = (clone $onProcessQuery)->count();
-        $onProcessSum   = (clone $onProcessQuery)->sum('requested_amount');
-        $opCmCount      = $filterCm(clone $onProcessQuery)->count();
-        $opCmSum        = $filterCm(clone $onProcessQuery)->sum('requested_amount');
-        $opRemCount     = $filterRem(clone $onProcessQuery)->count();
-        $opRemSum       = $filterRem(clone $onProcessQuery)->sum('requested_amount');
-
-        // 5. Encumbered Records (Completed & Secured with CM & REM breakdown)
-        $encumberedQuery = (clone $baseQuery)->where('status', 'Encumbered');
-        $encumberedCount = (clone $encumberedQuery)->count();
-        $encumberedSum   = (clone $encumberedQuery)->sum('requested_amount');
-        $encCmCount      = $filterCm(clone $encumberedQuery)->count();
-        $encCmSum        = $filterCm(clone $encumberedQuery)->sum('requested_amount');
-        $encRemCount     = $filterRem(clone $encumberedQuery)->count();
-        $encRemSum       = $filterRem(clone $encumberedQuery)->sum('requested_amount');
-
-        // 6. With Deficiency Records (Internal & External with CM & REM breakdown)
-        $deficiencyQuery = (clone $baseQuery)
-            ->whereIn('sub_status', ['internal_deficiency', 'external_deficiency']);
-        $deficiencyCount = (clone $deficiencyQuery)->count();
-        $deficiencySum   = (clone $deficiencyQuery)->sum('requested_amount');
-        $defCmCount      = $filterCm(clone $deficiencyQuery)->count();
-        $defCmSum        = $filterCm(clone $deficiencyQuery)->sum('requested_amount');
-        $defRemCount     = $filterRem(clone $deficiencyQuery)->count();
-        $defRemSum       = $filterRem(clone $deficiencyQuery)->sum('requested_amount');
-
         $recordLabel = fn (int $c) => number_format($c) . ' ' . ($c === 1 ? 'Record' : 'Records');
 
         return [
@@ -125,21 +93,6 @@ class StatsOverviewWidget extends BaseWidget
                 ->description("CM: {$penCmCount} (" . $formatShort($penCmSum) . ") | REM: {$penRemCount} (" . $formatShort($penRemSum) . ")")
                 ->descriptionIcon('heroicon-m-clock')
                 ->color($pendingCount > 0 ? 'warning' : 'gray'),
-
-            Stat::make('On Process Records', $recordLabel($onProcessCount))
-                ->description("CM: {$opCmCount} (" . $formatShort($opCmSum) . ") | REM: {$opRemCount} (" . $formatShort($opRemSum) . ")")
-                ->descriptionIcon('heroicon-m-arrow-path')
-                ->color('info'),
-
-            Stat::make('Encumbered Records', $recordLabel($encumberedCount))
-                ->description("CM: {$encCmCount} (" . $formatShort($encCmSum) . ") | REM: {$encRemCount} (" . $formatShort($encRemSum) . ")")
-                ->descriptionIcon('heroicon-m-shield-check')
-                ->color('success'),
-
-            Stat::make('With Deficiency', $recordLabel($deficiencyCount))
-                ->description("CM: {$defCmCount} (" . $formatShort($defCmSum) . ") | REM: {$defRemCount} (" . $formatShort($defRemSum) . ")")
-                ->descriptionIcon('heroicon-m-exclamation-triangle')
-                ->color($deficiencyCount > 0 ? 'danger' : 'success'),
         ];
     }
 }
