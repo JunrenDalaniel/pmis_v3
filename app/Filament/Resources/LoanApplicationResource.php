@@ -56,7 +56,7 @@ class LoanApplicationResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Released Loans';
 
-    protected static ?string $recordTitleAttribute = 'application_no';
+    // protected static ?string $recordTitleAttribute = 'application_no';
 
     public static function getNavigationBadge(): ?string
     {
@@ -86,10 +86,10 @@ class LoanApplicationResource extends Resource
         return $query;
     }
 
-    public static function getGloballySearchableAttributes(): array
-    {
-        return ['application_no', 'member.first_name', 'member.last_name', 'member.member_no'];
-    }
+    // public static function getGloballySearchableAttributes(): array
+    // {
+    //     return ['application_no', 'member.first_name', 'member.last_name', 'member.member_no'];
+    // }
 
     public static function getFormSections(): array
     {
@@ -793,19 +793,15 @@ class LoanApplicationResource extends Resource
                         ->compact()
                         ->collapsible()
                         ->schema([
-                            Grid::make(2)->schema([
-                                TextInput::make('bir_office')
-                                    ->label('BIR Office / RDO')
-                                    ->placeholder('e.g. RDO No. 98 — Cagayan de Oro'),
-                                DatePicker::make('bir_payment_date')
-                                    ->label('Date of Payment'),
-                            ]),
-                            Grid::make(2)->schema([
-                                TextInput::make('bir_or_no')
-                                    ->label('Official Receipt No. (OR No.)')
-                                    ->placeholder('e.g. OR-2026-001234'),
+                            Grid::make(['default' => 1, 'md' => 3])->schema([
+                                TextInput::make('bir_reference_no')
+                                    ->label('eFPS Reference Number')
+                                    ->placeholder('e.g. 652600074997564'),
+                                TextInput::make('bir_bank_confirmation_no')
+                                    ->label('Bank Confirmation / Ref Number')
+                                    ->placeholder('e.g. 00301037260910838464'),
                                 TextInput::make('bir_amount_paid')
-                                    ->label('Amount Paid (₱)')
+                                    ->label('DST Amount Paid (₱)')
                                     ->prefix('₱')
                                     ->placeholder('0.00')
                                     ->numeric(),

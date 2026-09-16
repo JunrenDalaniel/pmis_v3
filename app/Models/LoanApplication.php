@@ -53,7 +53,7 @@ class LoanApplication extends Model implements HasMedia
         // Notary
         'notary_name', 'notarized_date',
         // BIR
-        'bir_office', 'bir_payment_date', 'bir_or_no', 'bir_amount_paid',
+        'bir_office', 'bir_payment_date', 'bir_or_no', 'bir_reference_no', 'bir_bank_confirmation_no', 'bir_amount_paid',
         // ROD
         'rod_entry_no', 'rod_payment_date', 'rod_or_no', 'rod_amount_paid', 'rod_release_date',
         // LTO (CM only)
