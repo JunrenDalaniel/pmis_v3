@@ -814,24 +814,24 @@ class LoanApplicationResource extends Resource
                         ->compact()
                         ->collapsible()
                         ->schema([
-                            Grid::make(2)->schema([
+                            Grid::make(['default' => 1, 'md' => 3])->schema([
                                 TextInput::make('rod_entry_no')
-                                    ->label('ROD Entry No.')
-                                    ->placeholder('e.g. Entry No. 2026-0001234'),
+                                    ->label('Ref No.:')
+                                    ->placeholder('e.g. EPEB496/2026001432 or 1038896086'),
                                 DatePicker::make('rod_payment_date')
-                                    ->label('Date Paid / Filed'),
-                            ]),
-                            Grid::make(3)->schema([
-                                TextInput::make('rod_or_no')
-                                    ->label('Official Receipt No. (OR No.)')
-                                    ->placeholder('e.g. OR-2026-005678'),
+                                    ->label('Date of Payment:'),
                                 TextInput::make('rod_amount_paid')
-                                    ->label('Amount Paid (₱)')
+                                    ->label('ROD Amount Paid (₱):')
                                     ->prefix('₱')
                                     ->placeholder('0.00')
                                     ->numeric(),
+                            ]),
+                            Grid::make(['default' => 1, 'md' => 2])->schema([
+                                TextInput::make('rod_release_entry_no')
+                                    ->label('Release Entry #:')
+                                    ->placeholder('e.g. 2026-0005678'),
                                 DatePicker::make('rod_release_date')
-                                    ->label('Date Released / Returned'),
+                                    ->label('Release Entry Date:'),
                             ]),
                         ]),
 

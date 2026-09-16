@@ -55,7 +55,7 @@ class LoanApplication extends Model implements HasMedia
         // BIR
         'bir_office', 'bir_payment_date', 'bir_or_no', 'bir_reference_no', 'bir_bank_confirmation_no', 'bir_amount_paid',
         // ROD
-        'rod_entry_no', 'rod_payment_date', 'rod_or_no', 'rod_amount_paid', 'rod_release_date',
+        'rod_entry_no', 'rod_payment_date', 'rod_or_no', 'rod_amount_paid', 'rod_release_entry_no', 'rod_release_date',
         // LTO (CM only)
         'lto_office', 'lto_payment_date', 'lto_or_no', 'lto_amount_paid', 'lto_release_date',
         // Assessor's
