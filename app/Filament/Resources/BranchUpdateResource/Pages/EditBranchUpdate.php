@@ -20,19 +20,6 @@ class EditBranchUpdate extends EditRecord
         ];
     }
 
-    protected function getHeaderWidgets(): array
-    {
-        return [
-            \App\Filament\Widgets\LoanProgressStepperWidget::class,
-        ];
-    }
-
-    protected function getHeaderWidgetsData(): array
-    {
-        return [
-            'record' => $this->record,
-        ];
-    }
 
     protected function getRedirectUrl(): string
     {
