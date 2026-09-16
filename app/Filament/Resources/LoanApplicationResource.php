@@ -808,11 +808,12 @@ class LoanApplicationResource extends Resource
                             ]),
                         ]),
 
-                    // ── ROD ─────────────────────────────────────────────────
+                    // ── ROD (REM only) ──────────────────────────────────────
                     Section::make('Registry of Deeds (ROD)')
                         ->icon('heroicon-o-building-library')
                         ->compact()
                         ->collapsible()
+                        ->visible(fn ($get) => in_array($get('collateral_type'), ['real_estate_mortgage', 'rem_amendment']))
                         ->schema([
                             Grid::make(['default' => 1, 'md' => 3])->schema([
                                 TextInput::make('rod_entry_no')
@@ -832,6 +833,35 @@ class LoanApplicationResource extends Resource
                                     ->placeholder('e.g. 2026-0005678'),
                                 DatePicker::make('rod_release_date')
                                     ->label('Release Entry Date:'),
+                            ]),
+                        ]),
+
+                    // ── PPSR (CM only) ───────────────────────────────────────
+                    Section::make('Personal Property Security Registry (PPSR)')
+                        ->icon('heroicon-o-shield-check')
+                        ->compact()
+                        ->collapsible()
+                        ->visible(fn ($get) => in_array($get('collateral_type'), ['chattel_mortgage', 'cm_certification', 'cm_amendment']))
+                        ->schema([
+                            Grid::make(['default' => 1, 'md' => 2])->schema([
+                                TextInput::make('ppsr_notice_no')
+                                    ->label('Notice Registration #:')
+                                    ->placeholder('e.g. PPSR-260724001343'),
+                                TextInput::make('ppsr_receipt_no')
+                                    ->label('Receipt / Ref #:')
+                                    ->placeholder('e.g. 8771-08012026-863793'),
+                            ]),
+                            Grid::make(['default' => 1, 'md' => 3])->schema([
+                                DatePicker::make('ppsr_payment_date')
+                                    ->label('Date of Payment / Registration:'),
+                                TextInput::make('ppsr_amount_paid')
+                                    ->label('PPSR Amount Paid (₱):')
+                                    ->prefix('₱')
+                                    ->placeholder('0.00')
+                                    ->numeric(),
+                                TextInput::make('ppsr_transaction_no')
+                                    ->label('Transaction Number:')
+                                    ->placeholder('e.g. TRN-260724002410'),
                             ]),
                         ]),
 
@@ -863,11 +893,12 @@ class LoanApplicationResource extends Resource
                             ]),
                         ]),
 
-                    // ── ASSESSOR'S OFFICE ─────────────────────────────────────
+                    // ── ASSESSOR'S OFFICE (REM only) ─────────────────────────
                     Section::make("Assessor's Office")
                         ->icon('heroicon-o-map')
                         ->compact()
                         ->collapsible()
+                        ->visible(fn ($get) => in_array($get('collateral_type'), ['real_estate_mortgage', 'rem_amendment']))
                         ->schema([
                             Grid::make(3)->schema([
                                 TextInput::make('assessors_office')

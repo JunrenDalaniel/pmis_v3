@@ -54,8 +54,10 @@ class LoanApplication extends Model implements HasMedia
         'notary_name', 'notarized_date',
         // BIR
         'bir_office', 'bir_payment_date', 'bir_or_no', 'bir_reference_no', 'bir_bank_confirmation_no', 'bir_amount_paid',
-        // ROD
+        // ROD (REM only)
         'rod_entry_no', 'rod_payment_date', 'rod_or_no', 'rod_amount_paid', 'rod_release_entry_no', 'rod_release_date',
+        // PPSR (CM only)
+        'ppsr_notice_no', 'ppsr_receipt_no', 'ppsr_payment_date', 'ppsr_amount_paid', 'ppsr_transaction_no',
         // LTO (CM only)
         'lto_office', 'lto_payment_date', 'lto_or_no', 'lto_amount_paid', 'lto_release_date',
         // Assessor's
@@ -75,6 +77,8 @@ class LoanApplication extends Model implements HasMedia
         'rod_payment_date'      => 'date',
         'rod_amount_paid'       => 'decimal:2',
         'rod_release_date'      => 'date',
+        'ppsr_payment_date'     => 'date',
+        'ppsr_amount_paid'      => 'decimal:2',
         'lto_payment_date'      => 'date',
         'lto_amount_paid'       => 'decimal:2',
         'lto_release_date'      => 'date',
