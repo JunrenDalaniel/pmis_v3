@@ -1,0 +1,17 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 1. Block access to all dotfiles (.env, .git, etc.)
+    RewriteRule ^\.(.*)$ - [F,L]
+
+    # 2. Block access to critical configuration and dependency files
+    RewriteRule ^(composer\.(json|lock)|package\.json|package-lock\.json|phpunit\.xml|artisan)$ - [F,L,NC]
+
+    # 3. Block direct web access to internal Laravel directories
+    RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|tests|vendor)(/.*)?$ - [F,L,NC]
+</IfModule>
+
+# Defense in depth: Deny access to hidden files even if mod_rewrite is bypassed
+<FilesMatch "^\.(.*)$">
+    Require all denied
+</FilesMatch>
