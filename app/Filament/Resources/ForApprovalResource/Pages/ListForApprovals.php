@@ -17,14 +17,6 @@ class ListForApprovals extends ListRecords
 
     public function getTabs(): array
     {
-        $baseQuery = ForApprovalResource::getEloquentQuery();
-        $allCount = (clone $baseQuery)->count();
-
-        return [
-            'all' => Tab::make('All Queue Items')
-                ->icon('heroicon-o-clock')
-                ->badge($allCount)
-                ->badgeColor('warning'),
-        ];
+        return [];
     }
 }

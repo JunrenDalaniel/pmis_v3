@@ -70,10 +70,12 @@ class DisapprovedLoanResource extends Resource
             ->actions([
                 ActionGroup::make([
                     LoanApplicationResource::getViewDocumentsTableAction(),
+                    LoanApplicationResource::getQuickUploadTableAction(),
                     LoanApplicationResource::getResubmitTableAction(),
                     LoanApplicationResource::getDownloadArchiveTableAction(),
                     EditAction::make(),
-                    DeleteAction::make(),
+                    DeleteAction::make()
+                        ->visible(fn (LoanApplication $record): bool => auth()->user()?->can('Delete:LoanApplication') && (auth()->user()?->isHeadOfficeUser() || auth()->user()?->hasRole(['super_admin', 'Super Admin']))),
                 ]),
             ]);
     }

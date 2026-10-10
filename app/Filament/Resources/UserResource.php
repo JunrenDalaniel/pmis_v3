@@ -5,21 +5,22 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
 use BackedEnum;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Tables;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Notifications\Notification;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Resources\Resource;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Schema;
-use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Hash;
 use UnitEnum;
 
@@ -39,7 +40,24 @@ class UserResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Users';
 
-    protected static ?string $recordTitleAttribute = 'name';
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery()->with(['role', 'branchOffice', 'branches']);
+        $user = auth()->user();
+
+        if ($user) {
+            $allowedBranches = $user->getAllowedBranchIds();
+            if ($allowedBranches !== null) {
+                $query->where(function (Builder $q) use ($allowedBranches, $user) {
+                    $q->whereIn('branch_office_id', $allowedBranches)
+                      ->orWhereHas('branches', fn (Builder $bq) => $bq->whereIn('branch_offices.id', $allowedBranches))
+                      ->orWhere('id', $user->id);
+                });
+            }
+        }
+
+        return $query;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -63,14 +81,25 @@ class UserResource extends Resource
                                 ->unique(ignoreRecord: true)
                                 ->maxLength(255),
                         ]),
-                        TextInput::make('password')
-                            ->label('Password')
-                            ->placeholder('Enter a secure password')
-                            ->password()
-                            ->dehydrateStateUsing(fn ($state) => Hash::make($state))
-                            ->dehydrated(fn ($state) => filled($state))
-                            ->required(fn (string $operation): bool => $operation === 'create')
-                            ->maxLength(255),
+                        Grid::make(2)->schema([
+                            TextInput::make('password')
+                                ->label('Password')
+                                ->placeholder('Enter a secure password')
+                                ->password()
+                                ->dehydrateStateUsing(fn ($state) => Hash::make($state))
+                                ->dehydrated(fn ($state) => filled($state))
+                                ->required(fn (string $operation): bool => $operation === 'create')
+                                ->minLength(8)
+                                ->maxLength(255),
+                            TextInput::make('password_confirmation')
+                                ->label('Confirm Password')
+                                ->placeholder('Re-enter password')
+                                ->password()
+                                ->dehydrated(false)
+                                ->required(fn (string $operation): bool => $operation === 'create')
+                                ->same('password')
+                                ->visible(fn (string $operation): bool => $operation === 'create'),
+                        ]),
                     ]),
 
                 Section::make('Role & Branch Assignment')
@@ -80,7 +109,14 @@ class UserResource extends Resource
                         Grid::make(2)->schema([
                             Select::make('role_id')
                                 ->label('Organizational Role')
-                                ->relationship('role', 'name')
+                                ->relationship('role', 'name', function ($query) {
+                                    $currentUser = auth()->user();
+                                    if (! $currentUser?->hasRole(['super_admin', 'Super Admin'])) {
+                                        $query->whereNotIn('name', ['super_admin', 'Super Admin'])
+                                              ->where('code', '!=', 'super_admin');
+                                    }
+                                    return $query;
+                                })
                                 ->searchable()
                                 ->preload()
                                 ->required(),
@@ -152,12 +188,22 @@ class UserResource extends Resource
                         ->label('Reset Password')
                         ->icon('heroicon-o-key')
                         ->color('warning')
+                        ->visible(function (User $record): bool {
+                            $currentUser = auth()->user();
+                            if (! $currentUser || ! $currentUser->can('Update:User')) {
+                                return false;
+                            }
+                            if ($record->hasRole(['super_admin', 'Super Admin']) && ! $currentUser->hasRole(['super_admin', 'Super Admin'])) {
+                                return false;
+                            }
+                            return true;
+                        })
                         ->schema([
                             TextInput::make('new_password')
                                 ->label('New Password')
                                 ->password()
                                 ->required()
-                                ->minLength(6),
+                                ->minLength(8),
                             TextInput::make('new_password_confirmation')
                                 ->label('Confirm New Password')
                                 ->password()

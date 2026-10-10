@@ -3,7 +3,7 @@
 @endphp
 
 @if ($canCreate)
-    <div class="flex items-center me-3">
+    <div class="flex items-center ms-3 me-2">
         <x-filament::button
             tag="a"
             href="{{ \App\Filament\Resources\LoanApplicationResource::getUrl('create') }}"

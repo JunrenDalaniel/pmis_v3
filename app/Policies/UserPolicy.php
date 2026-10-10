@@ -2,71 +2,119 @@
 
 namespace App\Policies;
 
-use Illuminate\Foundation\Auth\User as AuthUser;
+use App\Models\User;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
 class UserPolicy
 {
     use HandlesAuthorization;
+
+    protected function canAccessBranch(User $authUser, ?int $branchId): bool
+    {
+        $allowed = $authUser->getAllowedBranchIds();
+        if ($allowed === null) {
+            return true;
+        }
+
+        return $branchId !== null && in_array($branchId, $allowed, true);
+    }
     
-    public function viewAny(AuthUser $authUser): bool
+    public function viewAny(User $authUser): bool
     {
-        return $authUser->can('ViewAny:User');
+        return $authUser->hasPermissionTo('ViewAny:User');
     }
 
-    public function view(AuthUser $authUser): bool
+    public function view(User $authUser, User $user): bool
     {
-        return $authUser->can('View:User');
+        if (! $authUser->hasPermissionTo('View:User')) {
+            return false;
+        }
+
+        return $authUser->id === $user->id
+            || $this->canAccessBranch($authUser, $user->branch_office_id);
     }
 
-    public function create(AuthUser $authUser): bool
+    public function create(User $authUser): bool
     {
-        return $authUser->can('Create:User');
+        return $authUser->hasPermissionTo('Create:User');
     }
 
-    public function update(AuthUser $authUser): bool
+    public function update(User $authUser, User $user): bool
     {
-        return $authUser->can('Update:User');
+        if (! $authUser->hasPermissionTo('Update:User')) {
+            return false;
+        }
+
+        // Prevent non-super admin from modifying super admin accounts
+        if ($user->hasRole(['super_admin', 'Super Admin']) && ! $authUser->hasRole(['super_admin', 'Super Admin'])) {
+            return false;
+        }
+
+        return $authUser->id === $user->id
+            || $this->canAccessBranch($authUser, $user->branch_office_id);
     }
 
-    public function delete(AuthUser $authUser): bool
+    public function delete(User $authUser, User $user): bool
     {
-        return $authUser->can('Delete:User');
+        if (! $authUser->hasPermissionTo('Delete:User')) {
+            return false;
+        }
+
+        // Users cannot delete their own active account
+        if ($authUser->id === $user->id) {
+            return false;
+        }
+
+        // Protect Super Admin accounts from deletion
+        if ($user->hasRole(['super_admin', 'Super Admin'])) {
+            return false;
+        }
+
+        return $this->canAccessBranch($authUser, $user->branch_office_id);
     }
 
-    public function deleteAny(AuthUser $authUser): bool
+    public function deleteAny(User $authUser): bool
     {
-        return $authUser->can('DeleteAny:User');
+        return $authUser->hasPermissionTo('DeleteAny:User');
     }
 
-    public function restore(AuthUser $authUser): bool
+    public function restore(User $authUser, User $user): bool
     {
-        return $authUser->can('Restore:User');
+        return $authUser->hasPermissionTo('Restore:User')
+            && $this->canAccessBranch($authUser, $user->branch_office_id);
     }
 
-    public function forceDelete(AuthUser $authUser): bool
+    public function forceDelete(User $authUser, User $user): bool
     {
-        return $authUser->can('ForceDelete:User');
+        if (! $authUser->hasPermissionTo('ForceDelete:User')) {
+            return false;
+        }
+
+        if ($authUser->id === $user->id || $user->hasRole(['super_admin', 'Super Admin'])) {
+            return false;
+        }
+
+        return $this->canAccessBranch($authUser, $user->branch_office_id);
     }
 
-    public function forceDeleteAny(AuthUser $authUser): bool
+    public function forceDeleteAny(User $authUser): bool
     {
-        return $authUser->can('ForceDeleteAny:User');
+        return $authUser->hasPermissionTo('ForceDeleteAny:User');
     }
 
-    public function restoreAny(AuthUser $authUser): bool
+    public function restoreAny(User $authUser): bool
     {
-        return $authUser->can('RestoreAny:User');
+        return $authUser->hasPermissionTo('RestoreAny:User');
     }
 
-    public function replicate(AuthUser $authUser): bool
+    public function replicate(User $authUser, User $user): bool
     {
-        return $authUser->can('Replicate:User');
+        return $authUser->hasPermissionTo('Replicate:User')
+            && $this->canAccessBranch($authUser, $user->branch_office_id);
     }
 
-    public function reorder(AuthUser $authUser): bool
+    public function reorder(User $authUser): bool
     {
-        return $authUser->can('Reorder:User');
+        return $authUser->hasPermissionTo('Reorder:User');
     }
-
 }

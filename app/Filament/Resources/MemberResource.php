@@ -7,16 +7,20 @@ use App\Filament\Resources\MemberResource\RelationManagers;
 use App\Models\Member;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
@@ -26,6 +30,16 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 use UnitEnum;
 
 class MemberResource extends Resource
@@ -48,7 +62,67 @@ class MemberResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['member_no', 'first_name', 'last_name', 'suffix', 'email', 'phone'];
+        return ['member_no', 'cid', 'first_name', 'last_name', 'suffix', 'email', 'phone', 'loanApplications.application_no'];
+    }
+
+    public static function getGlobalSearchResultTitle(\Illuminate\Database\Eloquent\Model $record): string | \Illuminate\Contracts\Support\Htmlable
+    {
+        $idParts = array_filter([$record->member_no, $record->cid ? "CID: {$record->cid}" : null]);
+        return $record->full_name . (! empty($idParts) ? ' (' . implode(' • ', $idParts) . ')' : '');
+    }
+
+    public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
+    {
+        $details = [
+            'Branch' => $record->branchOffice?->name,
+            'CID'    => $record->cid,
+        ];
+
+        $loans = $record->loanApplications;
+
+        if ($loans && $loans->isNotEmpty()) {
+            if ($loans->count() === 1) {
+                $loan = $loans->first();
+                $collateral = match (true) {
+                    str_contains(strtolower((string) $loan->collateral_type), 'chattel') || str_contains(strtolower((string) $loan->collateral_type), 'cm') => 'Chattel Mortgage (CM)',
+                    str_contains(strtolower((string) $loan->collateral_type), 'real_estate') || str_contains(strtolower((string) $loan->collateral_type), 'rem') => 'Real Estate Mortgage (REM)',
+                    default => ucwords(str_replace('_', ' ', (string) $loan->collateral_type)),
+                };
+                $details['Collateral Type'] = $collateral;
+                $details['Loan Amount'] = '₱' . number_format((float) $loan->requested_amount, 2);
+            } else {
+                $collateralTypes = $loans->map(function ($loan) {
+                    return match (true) {
+                        str_contains(strtolower((string) $loan->collateral_type), 'chattel') || str_contains(strtolower((string) $loan->collateral_type), 'cm') => 'CM',
+                        str_contains(strtolower((string) $loan->collateral_type), 'real_estate') || str_contains(strtolower((string) $loan->collateral_type), 'rem') => 'REM',
+                        default => ucwords(str_replace('_', ' ', (string) $loan->collateral_type)),
+                    };
+                })->unique()->implode(' / ');
+
+                $totalAmount = $loans->sum('requested_amount');
+                $details['Collateral Type'] = $collateralTypes;
+                $details['Loan Amount'] = '₱' . number_format((float) $totalAmount, 2) . ' (' . $loans->count() . ' Loans)';
+            }
+        } else {
+            $details['Collateral Type'] = 'None';
+            $details['Loan Amount'] = 'None';
+        }
+
+        if ($record->phone) {
+            $details['Contact'] = $record->phone;
+        }
+
+        return array_filter($details, fn ($val) => filled($val));
+    }
+
+    public static function getGlobalSearchResultUrl(\Illuminate\Database\Eloquent\Model $record): string
+    {
+        return static::getUrl('view', ['record' => $record]);
+    }
+
+    public static function getGlobalSearchEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getGlobalSearchEloquentQuery()->with(['branchOffice', 'loanApplications']);
     }
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
@@ -75,7 +149,7 @@ class MemberResource extends Resource
                     ->icon('heroicon-o-user')
                     ->columnSpanFull()
                     ->schema([
-                        Grid::make(4)->schema([
+                        Grid::make(['default' => 1, 'sm' => 2, 'lg' => 5])->schema([
                             TextInput::make('member_no')
                                 ->label('Member ID')
                                 ->placeholder('e.g. API-2026-00008')
@@ -89,6 +163,11 @@ class MemberResource extends Resource
                                 ->dehydrated()
                                 ->required()
                                 ->unique(ignoreRecord: true)
+                                ->maxLength(255),
+                            TextInput::make('cid')
+                                ->label('CID')
+                                ->placeholder('e.g. 100234')
+                                ->prefixIcon('heroicon-o-hashtag')
                                 ->maxLength(255),
                             TextInput::make('first_name')
                                 ->label('First Name')
@@ -207,13 +286,21 @@ class MemberResource extends Resource
                     ->icon('heroicon-o-identification')
                     ->columnSpanFull()
                     ->schema([
-                        Grid::make(4)->schema([
+                        Grid::make(['default' => 1, 'sm' => 2, 'lg' => 5])->schema([
                             TextEntry::make('member_no')
                                 ->label('Member ID')
                                 ->badge()
                                 ->color('primary')
                                 ->icon('heroicon-o-hashtag')
                                 ->copyable(),
+
+                            TextEntry::make('cid')
+                                ->label('CID')
+                                ->badge()
+                                ->color('info')
+                                ->icon('heroicon-o-hashtag')
+                                ->copyable()
+                                ->placeholder('—'),
 
                             TextEntry::make('full_name')
                                 ->label('Full Name')
@@ -282,6 +369,11 @@ class MemberResource extends Resource
                 Tables\Columns\TextColumn::make('member_no')
                     ->label('Member ID')
                     ->description(fn ($record) => $record->branchOffice?->name)
+                    ->searchable()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('cid')
+                    ->label('CID')
+                    ->placeholder('—')
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('full_name')
@@ -376,8 +468,442 @@ class MemberResource extends Resource
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
+                    static::getExportToExcelBulkAction(),
+                    static::getImportExcelBulkAction(),
                 ]),
             ]);
+    }
+
+    public static function getImportModalSchema(): array
+    {
+        return [
+            Placeholder::make('template_guide')
+                ->hiddenLabel()
+                ->content(new HtmlString('
+                    <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
+                        <div class="font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between flex-wrap gap-2">
+                            <span>📋 Excel Import Format Guide</span>
+                            <a href="' . route('members.download-template') . '" class="text-emerald-600 dark:text-emerald-400 font-bold hover:underline inline-flex items-center gap-1" download>
+                                📥 Download Sample Template (.xlsx)
+                            </a>
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-400">
+                            Required columns: <b>First Name</b> and <b>Last Name</b>. If Member ID is left blank, the system will automatically generate sequential IDs (e.g. <code>API-2026-XXXXX</code>).
+                        </p>
+                    </div>
+                ')),
+
+            FileUpload::make('excel_file')
+                ->label('Choose Excel File (.xlsx, .xls, .csv)')
+                ->disk('local')
+                ->directory('temp-member-imports')
+                ->acceptedFileTypes([
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'application/vnd.ms-excel',
+                    'text/csv',
+                    'application/csv',
+                ])
+                ->required()
+                ->columnSpanFull(),
+        ];
+    }
+
+    public static function processExcelImport(string $filePath): array
+    {
+        $spreadsheet = IOFactory::load($filePath);
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray(null, true, true, true);
+
+        if (empty($rows) || count($rows) < 2) {
+            return ['success' => 0, 'skipped' => 0, 'error' => 'The uploaded file is empty or missing data rows.'];
+        }
+
+        $headerRow = $rows[1] ?? [];
+        $colMap = [];
+        foreach ($headerRow as $colLetter => $headerText) {
+            $clean = strtolower(trim((string) $headerText));
+            if (str_contains($clean, 'member') && (str_contains($clean, 'id') || str_contains($clean, 'no'))) {
+                $colMap['member_no'] = $colLetter;
+            } elseif (str_contains($clean, 'cid') || str_contains($clean, 'client')) {
+                $colMap['cid'] = $colLetter;
+            } elseif (str_contains($clean, 'first')) {
+                $colMap['first_name'] = $colLetter;
+            } elseif (str_contains($clean, 'middle')) {
+                $colMap['middle_name'] = $colLetter;
+            } elseif (str_contains($clean, 'last')) {
+                $colMap['last_name'] = $colLetter;
+            } elseif (str_contains($clean, 'suffix')) {
+                $colMap['suffix'] = $colLetter;
+            } elseif (str_contains($clean, 'birth') || str_contains($clean, 'dob')) {
+                $colMap['birth_date'] = $colLetter;
+            } elseif (str_contains($clean, 'sex') || str_contains($clean, 'gender')) {
+                $colMap['sex'] = $colLetter;
+            } elseif (str_contains($clean, 'civil')) {
+                $colMap['civil_status'] = $colLetter;
+            } elseif (str_contains($clean, 'tin')) {
+                $colMap['tin'] = $colLetter;
+            } elseif (str_contains($clean, 'sss') || str_contains($clean, 'gsis')) {
+                $colMap['sss_gsis'] = $colLetter;
+            } elseif (str_contains($clean, 'email')) {
+                $colMap['email'] = $colLetter;
+            } elseif (str_contains($clean, 'phone') || str_contains($clean, 'mobile') || str_contains($clean, 'contact')) {
+                $colMap['phone'] = $colLetter;
+            } elseif (str_contains($clean, 'address')) {
+                $colMap['address'] = $colLetter;
+            } elseif (str_contains($clean, 'branch')) {
+                $colMap['branch'] = $colLetter;
+            }
+        }
+
+        // Positional defaults if headers are not detected
+        $colMap['member_no']   = $colMap['member_no'] ?? 'A';
+        $colMap['cid']         = $colMap['cid'] ?? 'B';
+        $colMap['first_name']  = $colMap['first_name'] ?? 'C';
+        $colMap['middle_name'] = $colMap['middle_name'] ?? 'D';
+        $colMap['last_name']   = $colMap['last_name'] ?? 'E';
+        $colMap['suffix']      = $colMap['suffix'] ?? 'F';
+        $colMap['birth_date']  = $colMap['birth_date'] ?? 'G';
+        $colMap['sex']         = $colMap['sex'] ?? 'H';
+        $colMap['civil_status']= $colMap['civil_status'] ?? 'I';
+        $colMap['tin']         = $colMap['tin'] ?? 'J';
+        $colMap['email']       = $colMap['email'] ?? 'K';
+        $colMap['phone']       = $colMap['phone'] ?? 'L';
+        $colMap['branch']      = $colMap['branch'] ?? 'M';
+        $colMap['address']     = $colMap['address'] ?? 'N';
+
+        $cleanVal = function ($val) {
+            $str = trim((string) ($val ?? ''));
+            if ($str === '' || $str === '—' || $str === '-' || strtolower($str) === 'n/a' || strtolower($str) === 'null') {
+                return null;
+            }
+            return $str;
+        };
+
+        $successCount = 0;
+        $skippedCount = 0;
+        $allBranches = \App\Models\BranchOffice::all();
+        $nextAutoMemberId = (Member::max('id') ?? 0) + 1;
+
+        for ($r = 2; $r <= count($rows); $r++) {
+            $row = $rows[$r] ?? [];
+            $firstName = $cleanVal($row[$colMap['first_name']] ?? null);
+            $lastName = $cleanVal($row[$colMap['last_name']] ?? null);
+
+            if (! $firstName || ! $lastName) {
+                $skippedCount++;
+                continue;
+            }
+
+            $middleName = $cleanVal($row[$colMap['middle_name']] ?? null);
+            $suffix = $cleanVal($row[$colMap['suffix']] ?? null);
+            $cid = $cleanVal($row[$colMap['cid']] ?? null);
+            $memberNo = $cleanVal($row[$colMap['member_no']] ?? null) ?? '';
+
+            // Parse Date of Birth
+            $rawDob = $cleanVal($row[$colMap['birth_date']] ?? null);
+            $birthDate = null;
+            if (filled($rawDob)) {
+                try {
+                    if (is_numeric($rawDob)) {
+                        $birthDate = ExcelDate::excelToDateTimeObject((float) $rawDob)->format('Y-m-d');
+                    } else {
+                        $birthDate = Carbon::parse($rawDob)->format('Y-m-d');
+                    }
+                } catch (\Throwable $e) {
+                    $birthDate = null;
+                }
+            }
+
+            // Sex
+            $sexRaw = $cleanVal($row[$colMap['sex']] ?? null) ?? '';
+            $sex = match (true) {
+                str_starts_with(strtolower($sexRaw), 'm') => 'Male',
+                str_starts_with(strtolower($sexRaw), 'f') => 'Female',
+                default => null,
+            };
+
+            // Civil Status
+            $civilRaw = $cleanVal($row[$colMap['civil_status']] ?? null) ?? '';
+            $civilStatus = match (true) {
+                str_contains(strtolower($civilRaw), 'sing') => 'Single',
+                str_contains(strtolower($civilRaw), 'marr') => 'Married',
+                str_contains(strtolower($civilRaw), 'wid')  => 'Widowed',
+                str_contains(strtolower($civilRaw), 'sep')  => 'Separated',
+                default => $civilRaw ?: null,
+            };
+
+            $tin = $cleanVal($row[$colMap['tin']] ?? null);
+            $email = $cleanVal($row[$colMap['email']] ?? null);
+            $phone = $cleanVal($row[$colMap['phone']] ?? null);
+            $address = $cleanVal($row[$colMap['address']] ?? null);
+
+            // Branch matching
+            $branchRaw = $cleanVal($row[$colMap['branch']] ?? null) ?? '';
+            $branchOfficeId = null;
+            if ($branchRaw !== '') {
+                $branch = $allBranches->first(function ($b) use ($branchRaw) {
+                    return stripos($b->name, $branchRaw) !== false || (string) $b->branch_id === (string) $branchRaw;
+                });
+                if ($branch) {
+                    $branchOfficeId = $branch->id;
+                }
+            }
+
+            // Auto-generate or match Member No
+            if ($memberNo === '') {
+                $existing = null;
+                if ($cid) {
+                    $existing = Member::where('cid', $cid)->first();
+                }
+                if (! $existing && $birthDate) {
+                    $existing = Member::where('first_name', $firstName)
+                        ->where('last_name', $lastName)
+                        ->where('birth_date', $birthDate)
+                        ->first();
+                }
+
+                if ($existing) {
+                    $memberNo = $existing->member_no;
+                } else {
+                    $year = date('Y');
+                    do {
+                        $memberNo = 'API-' . $year . '-' . str_pad((string) $nextAutoMemberId, 5, '0', STR_PAD_LEFT);
+                        $nextAutoMemberId++;
+                    } while (Member::where('member_no', $memberNo)->exists());
+                }
+            }
+
+            Member::updateOrCreate(
+                ['member_no' => $memberNo],
+                array_filter([
+                    'cid' => $cid,
+                    'first_name' => $firstName,
+                    'middle_name' => $middleName,
+                    'last_name' => $lastName,
+                    'suffix' => $suffix,
+                    'birth_date' => $birthDate,
+                    'sex' => $sex,
+                    'civil_status' => $civilStatus,
+                    'tin' => $tin,
+                    'email' => $email,
+                    'phone' => $phone,
+                    'address' => $address,
+                    'branch_office_id' => $branchOfficeId,
+                    'is_active' => true,
+                ], fn ($v) => $v !== null)
+            );
+
+            $successCount++;
+        }
+
+        return [
+            'success' => $successCount,
+            'skipped' => $skippedCount,
+            'error'   => null,
+        ];
+    }
+
+    public static function canImportExcel(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        // Disable Import Excel for Mortgage Document Specialist
+        if ($user->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist']) || $user->role?->code === 'mortgage_document_specialist') {
+            return false;
+        }
+
+        return true;
+    }
+
+    public static function getImportExcelAction(): Action
+    {
+        return Action::make('import_excel')
+            ->label('Import Excel')
+            ->icon('heroicon-o-arrow-up-tray')
+            ->color('info')
+            ->visible(fn () => static::canImportExcel())
+            ->modalHeading('Import Members from Excel')
+            ->modalDescription('Upload an Excel spreadsheet to batch import members.')
+            ->modalSubmitActionLabel('Import Records')
+            ->schema(static::getImportModalSchema())
+            ->action(function (array $data) {
+                $filePath = Storage::disk('local')->path($data['excel_file']);
+                $result = static::processExcelImport($filePath);
+                Storage::disk('local')->delete($data['excel_file']);
+
+                if ($result['error']) {
+                    Notification::make()
+                        ->title('Import Failed')
+                        ->body($result['error'])
+                        ->danger()
+                        ->send();
+                    return;
+                }
+
+                Notification::make()
+                    ->title('✅ Members Imported Successfully')
+                    ->body("Imported / Updated {$result['success']} member record(s)" . ($result['skipped'] > 0 ? " ({$result['skipped']} empty rows skipped)" : ''))
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public static function getImportExcelBulkAction(): BulkAction
+    {
+        return BulkAction::make('import_excel_bulk')
+            ->label('Import Excel')
+            ->icon('heroicon-o-arrow-up-tray')
+            ->color('info')
+            ->visible(fn () => static::canImportExcel())
+            ->modalHeading('Import Members from Excel')
+            ->modalDescription('Upload an Excel spreadsheet to batch import members.')
+            ->modalSubmitActionLabel('Import Records')
+            ->schema(static::getImportModalSchema())
+            ->action(function (array $data) {
+                $filePath = Storage::disk('local')->path($data['excel_file']);
+                $result = static::processExcelImport($filePath);
+                Storage::disk('local')->delete($data['excel_file']);
+
+                if ($result['error']) {
+                    Notification::make()
+                        ->title('Import Failed')
+                        ->body($result['error'])
+                        ->danger()
+                        ->send();
+                    return;
+                }
+
+                Notification::make()
+                    ->title('✅ Members Imported Successfully')
+                    ->body("Imported / Updated {$result['success']} member record(s)" . ($result['skipped'] > 0 ? " ({$result['skipped']} empty rows skipped)" : ''))
+                    ->success()
+                    ->send();
+            })
+            ->deselectRecordsAfterCompletion();
+    }
+
+    public static function getExportToExcelBulkAction(): BulkAction
+    {
+        return BulkAction::make('export_to_excel')
+            ->label('Export to Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                $spreadsheet = new Spreadsheet();
+                $sheet = $spreadsheet->getActiveSheet();
+                $sheet->setTitle('Members');
+
+                $headers = [
+                    'Member ID',
+                    'CID',
+                    'First Name',
+                    'Middle Name',
+                    'Last Name',
+                    'Suffix',
+                    'Date of Birth',
+                    'Sex',
+                    'Civil Status',
+                    'TIN',
+                    'Email Address',
+                    'Phone Number',
+                    'Assigned Branch',
+                    'Complete Address',
+                ];
+
+                $sheet->fromArray([$headers], null, 'A1');
+
+                // Header styling: Emerald green, bold white text, centered
+                $sheet->getStyle('A1:N1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'size' => 11,
+                    ],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => '15803D'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical'   => Alignment::VERTICAL_CENTER,
+                    ],
+                ]);
+                $sheet->getRowDimension(1)->setRowHeight(28);
+
+                $records->loadMissing('branchOffice');
+                $row = 2;
+                foreach ($records as $record) {
+                    $dataRow = [
+                        $record->member_no ?? '',
+                        $record->cid ?? '',
+                        $record->first_name ?? '',
+                        $record->middle_name ?? '',
+                        $record->last_name ?? '',
+                        $record->suffix ?? '',
+                        $record->birth_date ? $record->birth_date->format('Y-m-d') : '',
+                        $record->sex ?? '',
+                        $record->civil_status ?? '',
+                        $record->tin ?? '',
+                        $record->email ?? '',
+                        $record->phone ?? '',
+                        $record->branchOffice?->name ?? '',
+                        $record->address ?? '',
+                    ];
+
+                    $sheet->fromArray([$dataRow], null, "A{$row}", true);
+
+                    // Center-align IDs, dates, sex, status
+                    $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("G{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("H{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("I{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("J{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("L{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("M{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    // Alternating row background for clean readability
+                    if ($row % 2 === 1) {
+                        $sheet->getStyle("A{$row}:N{$row}")
+                            ->getFill()
+                            ->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()
+                            ->setRGB('F8FAFC');
+                    }
+
+                    $sheet->getRowDimension($row)->setRowHeight(22);
+                    $row++;
+                }
+
+                $lastRow = $row - 1;
+                if ($lastRow >= 2) {
+                    $sheet->getStyle("A1:N{$lastRow}")->applyFromArray([
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => Border::BORDER_THIN,
+                                'color' => ['rgb' => 'E2E8F0'],
+                            ],
+                        ],
+                    ]);
+                }
+
+                foreach (range('A', 'N') as $col) {
+                    $sheet->getColumnDimension($col)->setAutoSize(true);
+                }
+
+                $filename = 'Members_Export_' . now()->format('Ymd_His') . '.xlsx';
+
+                return response()->streamDownload(function () use ($spreadsheet) {
+                    $writer = new Xlsx($spreadsheet);
+                    $writer->save('php://output');
+                }, $filename, [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ]);
+            })
+            ->deselectRecordsAfterCompletion();
     }
 
     public static function getRelations(): array

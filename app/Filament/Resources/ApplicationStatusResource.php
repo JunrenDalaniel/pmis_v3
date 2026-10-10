@@ -37,7 +37,9 @@ class ApplicationStatusResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Application Statuses';
 
-    protected static ?string $recordTitleAttribute = 'name';
+    // protected static ?string $recordTitleAttribute = 'name';
+
+    protected static bool $isGloballySearchable = false;
 
     public static function form(Schema $schema): Schema
     {

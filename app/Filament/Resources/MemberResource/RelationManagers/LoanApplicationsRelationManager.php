@@ -39,7 +39,8 @@ class LoanApplicationsRelationManager extends RelationManager
                     ->color('gray')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('requested_amount')
-                    ->label('Requested Amount')
+                    ->label('Loan Amount')
+                    ->description(fn (\App\Models\LoanApplication $record): ?string => in_array($record->approval_status, ['Approved', 'Branch Updated']) ? null : 'Requested')
                     ->money('PHP')
                     ->weight('bold')
                     ->sortable(),
@@ -83,76 +84,156 @@ class LoanApplicationsRelationManager extends RelationManager
                     ->label('Download Archive')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('success')
-                    ->action(function (\App\Models\LoanApplication $record) {
+                    ->requiresConfirmation()
+                    ->modalHeading('📥 Download Encrypted Documents Archive')
+                    ->modalIcon('heroicon-o-lock-closed')
+                    ->modalIconColor('success')
+                    ->modalDescription(function (\App\Models\LoanApplication $record) {
                         $memberNo = $record->member?->member_no ?? 'MEMBER-GENERAL';
+                        $borrowerName = $record->member?->full_name ?? 'Borrower';
                         $appNo = $record->application_no ?? 'LN-GENERAL';
-                        $password = $memberNo;
+                        $cleanMemberNo = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) $memberNo);
+                        $cleanName = str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], '', (string) $borrowerName);
+                        $cleanName = preg_replace('/,{2,}/', ',', trim($cleanName));
+                        $expectedFileName = "{$cleanMemberNo}_{$cleanName}.zip";
 
-                        $safeMemberNo = str_replace(['/', '\\'], '-', $memberNo);
-                        $safeAppNo = str_replace(['/', '\\'], '-', $appNo);
-
-                        $basePath = storage_path("app/private/{$safeMemberNo}/{$safeAppNo}");
-
-                        if (!file_exists($basePath)) {
-                            \Filament\Notifications\Notification::make()
-                                ->title('No Files Found')
-                                ->body("No document files found for application {$appNo}.")
-                                ->warning()
-                                ->send();
-                            return;
-                        }
-
-                        $tempZipPath = storage_path("app/private/temp_{$safeAppNo}_" . time() . ".zip");
-                        $zip = new \ZipArchive();
-
-                        if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-                            \Filament\Notifications\Notification::make()
-                                ->title('Archive Error')
-                                ->body('Unable to generate zip archive file.')
-                                ->danger()
-                                ->send();
-                            return;
-                        }
-
-                        $zip->setPassword($password);
-
-                        $files = new \RecursiveIteratorIterator(
-                            new \RecursiveDirectoryIterator($basePath, \RecursiveDirectoryIterator::SKIP_DOTS),
-                            \RecursiveIteratorIterator::LEAVES_ONLY
-                        );
-
-                        $fileCount = 0;
-                        foreach ($files as $file) {
-                            if (!$file->isDir()) {
-                                $filePath = $file->getRealPath();
-                                $relativePath = substr($filePath, strlen($basePath) + 1);
-                                $zipEntryName = "{$safeAppNo}/" . str_replace('\\', '/', $relativePath);
-
-                                $zip->addFile($filePath, $zipEntryName);
-                                if (defined('\ZipArchive::EM_AES_256')) {
-                                    $zip->setEncryptionName($zipEntryName, \ZipArchive::EM_AES_256);
+                        return new \Illuminate\Support\HtmlString("
+                            <style>
+                                .pmis-modal-card {
+                                    background: #ffffff;
+                                    border: 1px solid #e2e8f0;
+                                    color: #1e293b;
+                                    border-radius: 10px;
+                                    padding: 16px;
+                                    font-size: 13px;
+                                    text-align: left;
                                 }
-                                $fileCount++;
-                            }
-                        }
+                                .dark .pmis-modal-card {
+                                    background: #18181b;
+                                    border: 1px solid #3f3f46;
+                                    color: #f4f4f5;
+                                }
+                                .pmis-row {
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: space-between;
+                                    gap: 12px;
+                                    padding: 7px 0;
+                                    border-bottom: 1px solid #f1f5f9;
+                                }
+                                .dark .pmis-row {
+                                    border-bottom-color: #27272a;
+                                }
+                                .pmis-label {
+                                    color: #64748b;
+                                    font-size: 12px;
+                                    font-weight: 600;
+                                }
+                                .dark .pmis-label {
+                                    color: #a1a1aa;
+                                }
+                                .pmis-val {
+                                    color: #0f172a;
+                                    font-weight: 700;
+                                    font-size: 12.5px;
+                                }
+                                .dark .pmis-val {
+                                    color: #ffffff;
+                                }
+                                .pmis-file-badge {
+                                    background: #e0f2fe;
+                                    color: #0369a1;
+                                    padding: 3px 8px;
+                                    border-radius: 6px;
+                                    font-family: monospace;
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                }
+                                .dark .pmis-file-badge {
+                                    background: #082f49;
+                                    color: #38bdf8;
+                                    border: 1px solid #0369a1;
+                                }
+                                .pmis-pwd-box {
+                                    margin-top: 12px;
+                                    padding: 12px 14px;
+                                    background: #ecfdf5;
+                                    border: 1px solid #a7f3d0;
+                                    border-radius: 8px;
+                                }
+                                .dark .pmis-pwd-box {
+                                    background: #022c22;
+                                    border: 1px solid #059669;
+                                }
+                                .pmis-pwd-heading {
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    text-transform: uppercase;
+                                    letter-spacing: 0.05em;
+                                    color: #047857;
+                                }
+                                .dark .pmis-pwd-heading {
+                                    color: #34d399;
+                                }
+                                .pmis-pwd-code {
+                                    font-size: 18px;
+                                    font-weight: 800;
+                                    color: #065f46;
+                                    font-family: monospace;
+                                    letter-spacing: 0.5px;
+                                    margin-top: 4px;
+                                    user-select: all;
+                                    cursor: pointer;
+                                }
+                                .dark .pmis-pwd-code {
+                                    color: #6ee7b7;
+                                }
+                                .pmis-hint {
+                                    margin-top: 12px;
+                                    font-size: 11.5px;
+                                    line-height: 1.5;
+                                    color: #64748b;
+                                }
+                                .dark .pmis-hint {
+                                    color: #a1a1aa;
+                                }
+                            </style>
+                            <div class='pmis-modal-card'>
+                                <div class='pmis-row' style='padding-top: 0;'>
+                                    <span class='pmis-label'>📄 File Name:</span>
+                                    <span class='pmis-file-badge'>" . e($expectedFileName) . "</span>
+                                </div>
+                                <div class='pmis-row'>
+                                    <span class='pmis-label'>👤 Borrower:</span>
+                                    <span class='pmis-val'>" . e($borrowerName) . "</span>
+                                </div>
+                                <div class='pmis-row' style='border-bottom: none;'>
+                                    <span class='pmis-label'>📋 Loan App:</span>
+                                    <span class='pmis-val'>" . e($appNo) . "</span>
+                                </div>
+                                <div class='pmis-pwd-box'>
+                                    <div class='pmis-pwd-heading'>🔑 Password to Extract (Member ID):</div>
+                                    <div class='pmis-pwd-code' title='Click to highlight and copy'>" . e($memberNo) . "</div>
+                                </div>
+                                <div class='pmis-hint'>
+                                    Use the <strong style='color: inherit;'>Member ID</strong> above as the password when opening or extracting the ZIP file using 7-Zip, WinRAR, or Windows Extractor.
+                                </div>
+                            </div>
+                        ");
+                    })
+                    ->modalSubmitActionLabel('Download Archive')
+                    ->modalCancelActionLabel('Cancel')
+                    ->action(function (\App\Models\LoanApplication $record, $livewire) {
+                        $downloadUrl = route('loans.download-archive', ['record' => $record->id]);
+                        $password = $record->member?->member_no ?? 'MEMBER-GENERAL';
 
-                        $zip->close();
+                        \Filament\Notifications\Notification::make()
+                            ->title('📦 Archive Downloading')
+                            ->body("Password: {$password}")
+                            ->success()
+                            ->send();
 
-                        if ($fileCount === 0) {
-                            if (file_exists($tempZipPath)) {
-                                unlink($tempZipPath);
-                            }
-                            \Filament\Notifications\Notification::make()
-                                ->title('No Files to Download')
-                                ->body("No files are currently stored in application {$appNo}.")
-                                ->warning()
-                                ->send();
-                            return;
-                        }
-
-                        $downloadFileName = $record->member?->full_name ? str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], '_', $record->member->full_name) : $safeAppNo;
-
-                        return response()->download($tempZipPath, "{$downloadFileName}.zip")->deleteFileAfterSend(true);
+                        $livewire->js("window.location.href = '{$downloadUrl}';");
                     }),
                 Action::make('view_application')
                     ->label('Open / Edit Loan Record')

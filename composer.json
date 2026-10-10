@@ -7,12 +7,16 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
-        "al-saloul/filament-image-gallery": "^3.0",
+        "barryvdh/laravel-dompdf": "^3.1",
         "bezhansalleh/filament-shield": "^4.3",
+        "danihidayatx/image-optimizer": "^2.2",
         "filament/filament": "^5.0",
         "filament/spatie-laravel-media-library-plugin": "^5.7",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
+        "leandrocfe/filament-apex-charts": "^5.1",
+        "phpoffice/phpspreadsheet": "^5.9",
+        "spatie/laravel-activitylog": "4.12",
         "spatie/laravel-medialibrary": "^11.23",
         "swisnl/filament-backgrounds": "^2.0"
     },

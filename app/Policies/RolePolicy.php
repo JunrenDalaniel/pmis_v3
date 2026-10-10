@@ -29,17 +29,22 @@ class RolePolicy
 
     public function update(AuthUser $authUser, Role $role): bool
     {
-        return $authUser->can('Update:Role');
+        return $authUser->hasPermissionTo('Update:Role');
     }
 
     public function delete(AuthUser $authUser, Role $role): bool
     {
-        return $authUser->can('Delete:Role');
+        // Never allow deleting the core super_admin role
+        if ($role->name === 'super_admin' || $role->name === 'Super Admin' || $role->code === 'super_admin') {
+            return false;
+        }
+
+        return $authUser->hasPermissionTo('Delete:Role');
     }
 
     public function deleteAny(AuthUser $authUser): bool
     {
-        return $authUser->can('DeleteAny:Role');
+        return $authUser->hasPermissionTo('DeleteAny:Role');
     }
 
     public function restore(AuthUser $authUser, Role $role): bool

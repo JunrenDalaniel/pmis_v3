@@ -7,12 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use App\Models\User;
+use App\Models\Member;
+use App\Models\LoanApplication;
 
 class BranchOffice extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        'branch_id',
         'name',
         'manager_name',
         'manager_user_id',
@@ -45,6 +49,11 @@ class BranchOffice extends Model
     public function members(): HasMany
     {
         return $this->hasMany(Member::class);
+    }
+
+    public function loanApplications(): HasMany
+    {
+        return $this->hasMany(LoanApplication::class, 'branch_office_id');
     }
 
     public function assignedUsers(): \Illuminate\Database\Eloquent\Relations\BelongsToMany

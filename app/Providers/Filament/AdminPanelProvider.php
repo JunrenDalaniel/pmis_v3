@@ -14,7 +14,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages\Dashboard;
+use App\Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -44,7 +44,7 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotifications()
             ->databaseNotificationsPolling('30s')
             ->renderHook(
-                PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
+                PanelsRenderHook::GLOBAL_SEARCH_AFTER,
                 fn () => view('filament.components.topbar-new-mortgage-action'),
             )
             ->navigationGroups([
@@ -52,6 +52,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Loan Operations'),
                 NavigationGroup::make('Document Tracking Pipeline')
                     ->collapsed(),
+                NavigationGroup::make('Reports & Analytics'),
                 NavigationGroup::make('System Administration')
                     ->collapsed(),
             ])
@@ -104,13 +105,29 @@ class AdminPanelProvider extends PanelProvider
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['rod_paid', 'ROD Paid', 'Rod Paid']))
                     ->sort(6),
 
+                NavigationItem::make('For PPSR')
+                    ->group('Document Tracking Pipeline')
+                    ->icon('heroicon-o-shield-check')
+                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_ppsr']))
+                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For PPSR', 'For Ppsr'])->count() ?: null, 'warning')
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_ppsr', 'For PPSR', 'For Ppsr']))
+                    ->sort(7),
+
+                NavigationItem::make('PPSR Paid')
+                    ->group('Document Tracking Pipeline')
+                    ->icon('heroicon-o-check-circle')
+                    ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'ppsr_paid']))
+                    ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['PPSR Paid', 'Ppsr Paid'])->count() ?: null, 'info')
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['ppsr_paid', 'PPSR Paid', 'Ppsr Paid']))
+                    ->sort(8),
+
                 NavigationItem::make('For LTO')
                     ->group('Document Tracking Pipeline')
                     ->icon('heroicon-o-truck')
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'for_lto']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['For LTO', 'For Lto'])->count() ?: null, 'warning')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['for_lto', 'For LTO', 'For Lto']))
-                    ->sort(7),
+                    ->sort(9),
 
                 NavigationItem::make('Encumbered')
                     ->group('Document Tracking Pipeline')
@@ -118,7 +135,7 @@ class AdminPanelProvider extends PanelProvider
                     ->url(fn (): string => LoanApplicationResource::getUrl('index', ['stage' => 'encumbered']))
                     ->badge(fn () => LoanApplicationResource::getEloquentQuery()->whereIn('status', ['Encumbered'])->count() ?: null, 'success')
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.resources.loan-applications.index') && in_array(request()->query('stage'), ['encumbered', 'Encumbered']))
-                    ->sort(8),
+                    ->sort(10),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
@@ -127,8 +144,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                // StatsOverviewWidget is auto-discovered above — do not list again to avoid duplicates
-                AccountWidget::class,
+                // StatsOverviewWidget and charts are auto-discovered above
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -142,6 +158,7 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])
             ->plugins([
+                \Leandrocfe\FilamentApexCharts\FilamentApexChartsPlugin::make(),
                 FilamentShieldPlugin::make()
                     ->navigationGroup('System Administration')
                     ->navigationSort(99),
@@ -151,7 +168,6 @@ class AdminPanelProvider extends PanelProvider
                             ->directory('images/backgrounds')
                     )
                     ->showAttribution(false),
-                \Alsaloul\ImageGallery\ImageGalleryPlugin::make(),
             ])
             ->authMiddleware([
                 Authenticate::class,

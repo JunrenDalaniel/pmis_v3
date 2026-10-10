@@ -35,8 +35,14 @@ class ListLoanApplications extends ListRecords
                 'bir_paid'           => ['BIR Paid', 'Bir Paid'],
                 'for_rod'            => ['For ROD', 'For Rod'],
                 'rod_paid'           => ['ROD Paid', 'Rod Paid'],
-                'for_lto'            => ['For LTO', 'For Lto'],
-                'encumbered'         => ['Encumbered'],
+                'for_ppsr'           => ['For PPSR', 'For Ppsr'],
+                'ppsr_paid'          => ['PPSR Paid', 'Ppsr Paid'],
+                'for_lto'                    => ['For LTO', 'For Lto'],
+                'encumbered'                 => ['Encumbered'],
+                'fully_paid'                 => ['Fully Paid'],
+                'released_self_cancellation' => ['Released For Self-Cancellation', 'Released for Self-Cancellation'],
+                'for_cancellation'           => ['For Cancellation'],
+                'mortgage_released'          => ['Mortgage Released'],
             ];
 
             // Sanitize: only allow known stage keys to prevent unexpected query values

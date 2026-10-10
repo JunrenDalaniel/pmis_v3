@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\InteractsWithDashboardFilters;
 use App\Filament\Resources\LoanApplicationResource;
 use App\Models\ChattelCollateral;
 use Carbon\Carbon;
@@ -13,11 +14,13 @@ use Illuminate\Database\Eloquent\Builder;
 
 class VehicleRenewalAlertWidget extends BaseWidget
 {
+    use InteractsWithDashboardFilters;
+
     protected static bool $isLazy = false;
 
     protected static ?string $heading = '🚨 Vehicle LTO Registration & Renewal Alerts';
 
-    protected static ?int $sort = 7;
+    protected static ?int $sort = 8;
 
     protected int | string | array $columnSpan = 'full';
 
@@ -35,22 +38,40 @@ class VehicleRenewalAlertWidget extends BaseWidget
             $query->whereHas('loanApplication', fn ($q) => $q->whereIn('branch_office_id', $allowed));
         }
 
+        [$startDate, $endDate] = $this->getFilterDateRange();
+        $selectedBranch = $this->getFilterBranchId();
+        $selectedCollateral = $this->getFilterCollateralType();
+        $presetLabel = $this->getFilterPresetLabel();
+
+        if ($selectedBranch) {
+            $query->whereHas('loanApplication', fn ($q) => $q->where('branch_office_id', $selectedBranch));
+        }
+
+        if ($selectedCollateral && $selectedCollateral !== 'chattel_mortgage') {
+            $query->whereRaw('1 = 0');
+        }
+
+        if ($startDate && $endDate) {
+            $query->whereBetween('registration_renewal_date', [$startDate, $endDate]);
+        } elseif ($startDate) {
+            $query->whereDate('registration_renewal_date', '>=', $startDate);
+        } elseif ($endDate) {
+            $query->whereDate('registration_renewal_date', '<=', $endDate);
+        }
+
         return $table
             ->query($query)
             ->heading('🚨 Vehicle LTO Registration & Renewal Alerts')
-            ->description(function () use ($allowed) {
-                $checkQuery = ChattelCollateral::whereNotNull('registration_renewal_date')
+            ->description(function () use ($query, $presetLabel) {
+                $checkQuery = (clone $query)
+                    ->whereNotNull('registration_renewal_date')
                     ->where('registration_renewal_date', '<', now());
-
-                if (is_array($allowed)) {
-                    $checkQuery->whereHas('loanApplication', fn ($q) => $q->whereIn('branch_office_id', $allowed));
-                }
 
                 $expiredCount = $checkQuery->count();
                 if ($expiredCount > 0) {
-                    return "⚠️ May {$expiredCount} na sasakyan na EXPIRED na ang LTO registration. Kailangan ng agarang aksyon.";
+                    return "⚠️ [{$presetLabel}] May {$expiredCount} na sasakyan na EXPIRED na ang LTO registration sa napiling saklaw.";
                 }
-                return 'Lahat ng sasakyan ay updated ang LTO registration.';
+                return "[{$presetLabel}] Lahat ng sasakyan ay updated o walang expired sa napiling saklaw.";
             })
             ->columns([
                 Tables\Columns\TextColumn::make('plate_no')

@@ -22,6 +22,15 @@ class CreateMember extends CreateRecord
             }
         }
 
+        $year = date('Y');
+        $nextId = (\App\Models\Member::max('id') ?? 0) + 1;
+        $memberNo = $data['member_no'] ?? ('API-' . $year . '-' . str_pad((string) $nextId, 5, '0', STR_PAD_LEFT));
+        while (\App\Models\Member::where('member_no', $memberNo)->exists()) {
+            $nextId++;
+            $memberNo = 'API-' . $year . '-' . str_pad((string) $nextId, 5, '0', STR_PAD_LEFT);
+        }
+        $data['member_no'] = $memberNo;
+
         return $data;
     }
 }

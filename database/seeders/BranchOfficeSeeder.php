@@ -135,10 +135,12 @@ class BranchOfficeSeeder extends Seeder
             ],
         ];
 
-        foreach ($branches as $branch) {
+        foreach ($branches as $index => $branch) {
+            $branchId = 'BR-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT);
             BranchOffice::updateOrCreate(
                 ['name' => $branch['name']],
                 [
+                    'branch_id' => $branchId,
                     'area' => $branch['area'],
                     'address' => $branch['address'],
                     'is_active' => true,

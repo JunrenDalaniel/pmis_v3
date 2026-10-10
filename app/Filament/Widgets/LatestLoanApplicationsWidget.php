@@ -7,17 +7,20 @@ use App\Models\ApplicationStatus;
 use App\Models\LoanApplication;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use App\Filament\Concerns\InteractsWithDashboardFilters;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 
 class LatestLoanApplicationsWidget extends BaseWidget
 {
+    use InteractsWithDashboardFilters;
+
     protected static bool $isLazy = false;
 
     protected static ?string $heading = 'Recent Loan Applications & Document Aging';
 
-    protected static ?int $sort = 6;
+    protected static ?int $sort = 9;
 
     protected int | string | array $columnSpan = 'full';
 
@@ -32,6 +35,27 @@ class LatestLoanApplicationsWidget extends BaseWidget
 
         if (is_array($allowed)) {
             $query->whereIn('branch_office_id', $allowed);
+        }
+
+        [$startDate, $endDate] = $this->getFilterDateRange();
+        $selectedBranch = $this->getFilterBranchId();
+        $selectedCollateral = $this->getFilterCollateralType();
+
+        if ($startDate) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+        if ($selectedBranch) {
+            $query->where('branch_office_id', $selectedBranch);
+        }
+        if ($selectedCollateral) {
+            if ($selectedCollateral === 'real_estate_mortgage') {
+                $query->where(fn ($q) => $q->where('collateral_type', 'like', '%real%')->orWhere('collateral_type', 'like', '%rem%'));
+            } elseif ($selectedCollateral === 'chattel_mortgage') {
+                $query->where(fn ($q) => $q->where('collateral_type', 'like', '%chattel%')->orWhere('collateral_type', 'like', '%cm%'));
+            }
         }
 
         return $table

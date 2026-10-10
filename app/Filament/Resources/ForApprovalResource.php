@@ -49,29 +49,11 @@ class ForApprovalResource extends Resource
             ->with(['member', 'branchOffice', 'chattelCollaterals', 'realEstateCollaterals']);
 
         $user = auth()->user();
-        if (! $user) {
-            return $query;
-        }
-
-        if ($user->hasRole(['super_admin', 'Super Admin']) || in_array($user->role?->code, ['super_admin', 'operation_division_manager', 'chief_executive_officer', 'audit', 'compliance_specialist', 'appraiser'])) {
-            return $query;
-        }
-
-        if ($user->hasRole(['Area Manager 1 (AM1)', 'area_manager_1']) || $user->role?->code === 'area_manager_1') {
-            return $query->whereHas('branchOffice', fn ($b) => $b->where('area', 'like', '%1%'));
-        }
-        if ($user->hasRole(['Area Manager 2 (AM2)', 'area_manager_2']) || $user->role?->code === 'area_manager_2') {
-            return $query->whereHas('branchOffice', fn ($b) => $b->where('area', 'like', '%2%'));
-        }
-        if ($user->hasRole(['Area Manager 3 (AM3)', 'area_manager_3']) || $user->role?->code === 'area_manager_3') {
-            return $query->whereHas('branchOffice', fn ($b) => $b->where('area', 'like', '%3%'));
-        }
-
-        if ($user->branch_office_id !== null) {
-            $query->where('branch_office_id', $user->branch_office_id);
-        } else {
-            // No branch assigned — return no results to prevent data leak
-            return $query->whereRaw('1 = 0');
+        if ($user) {
+            $allowedBranches = $user->getAllowedBranchIds();
+            if (is_array($allowedBranches)) {
+                $query->whereIn('branch_office_id', $allowedBranches);
+            }
         }
 
         return $query;
@@ -88,11 +70,13 @@ class ForApprovalResource extends Resource
             ->actions([
                 ActionGroup::make([
                     LoanApplicationResource::getViewDocumentsTableAction(),
+                    LoanApplicationResource::getQuickUploadTableAction(),
                     LoanApplicationResource::getApproveTableAction(),
                     LoanApplicationResource::getDisapproveTableAction(),
                     LoanApplicationResource::getDownloadArchiveTableAction(),
                     EditAction::make(),
-                    DeleteAction::make(),
+                    DeleteAction::make()
+                        ->visible(fn (LoanApplication $record): bool => auth()->user()?->can('Delete:LoanApplication') && (auth()->user()?->isHeadOfficeUser() || auth()->user()?->hasRole(['super_admin', 'Super Admin']))),
                 ]),
             ]);
     }

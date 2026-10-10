@@ -5,10 +5,16 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\BranchOfficeResource\Pages;
 use App\Models\BranchOffice;
 use BackedEnum;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -37,7 +43,9 @@ class BranchOfficeResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Branch Offices';
 
-    protected static ?string $recordTitleAttribute = 'name';
+    // protected static ?string $recordTitleAttribute = 'name';
+
+    protected static bool $isGloballySearchable = false;
 
     public static function form(Schema $schema): Schema
     {
@@ -48,14 +56,26 @@ class BranchOfficeResource extends Resource
                     ->icon('heroicon-o-building-office')
                     ->columnSpanFull()
                     ->schema([
-                        Grid::make(3)->schema([
+                        Grid::make(['default' => 1, 'sm' => 2, 'lg' => 4])->schema([
+                            TextInput::make('branch_id')
+                                ->label('Branch ID')
+                                ->placeholder('e.g. BR-001')
+                                ->prefixIcon('heroicon-o-identification')
+                                ->default(function () {
+                                    $nextId = (\App\Models\BranchOffice::max('id') ?? 0) + 1;
+                                    return 'BR-' . str_pad((string) $nextId, 3, '0', STR_PAD_LEFT);
+                                })
+                                ->unique(ignoreRecord: true)
+                                ->maxLength(50),
                             TextInput::make('name')
                                 ->label('Branch Name')
                                 ->placeholder('e.g. BUTUAN')
+                                ->prefixIcon('heroicon-o-building-office')
                                 ->required()
                                 ->maxLength(255),
                             Select::make('area')
                                 ->label('Regional Area Assignment')
+                                ->prefixIcon('heroicon-o-map')
                                 ->options([
                                     'Area 1' => 'Area 1',
                                     'Area 2' => 'Area 2',
@@ -102,7 +122,12 @@ class BranchOfficeResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')
+                Tables\Columns\TextColumn::make('branch_id')
+                    ->label('Branch ID')
+                    ->badge()
+                    ->color('primary')
+                    ->placeholder('—')
+                    ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('name')
                     ->label('Branch Name')
@@ -153,8 +178,112 @@ class BranchOfficeResource extends Resource
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
+                    static::getExportToExcelBulkAction(),
                 ]),
             ]);
+    }
+
+    public static function getExportToExcelBulkAction(): BulkAction
+    {
+        return BulkAction::make('export_to_excel')
+            ->label('Export to Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                $spreadsheet = new Spreadsheet();
+                $sheet = $spreadsheet->getActiveSheet();
+                $sheet->setTitle('Branch Offices');
+
+                $headers = [
+                    'Branch ID',
+                    'Branch Name',
+                    'Regional Area',
+                    'Branch Manager / OIC',
+                    'Manager Contact No.',
+                    'Manager Email Address',
+                    'Complete Address',
+                    'Status',
+                ];
+
+                $sheet->fromArray([$headers], null, 'A1');
+
+                // Header styling: Emerald green, bold white text, centered
+                $sheet->getStyle('A1:H1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'size' => 11,
+                    ],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => '15803D'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical'   => Alignment::VERTICAL_CENTER,
+                    ],
+                ]);
+                $sheet->getRowDimension(1)->setRowHeight(26);
+
+                $row = 2;
+                foreach ($records as $record) {
+                    $dataRow = [
+                        $record->branch_id ?? '—',
+                        $record->name ?? '—',
+                        $record->area ?? '—',
+                        $record->manager_name ?? '—',
+                        $record->manager_phone_no ?? '—',
+                        $record->manager_email ?? '—',
+                        $record->address ?? '—',
+                        $record->is_active ? 'Active' : 'Inactive',
+                    ];
+
+                    $sheet->fromArray([$dataRow], null, "A{$row}", true);
+
+                    // Center-align Branch ID, Area, and Status
+                    $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("C{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("H{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    // Alternating row background for clean readability
+                    if ($row % 2 === 1) {
+                        $sheet->getStyle("A{$row}:H{$row}")
+                            ->getFill()
+                            ->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()
+                            ->setRGB('F8FAFC');
+                    }
+
+                    $sheet->getRowDimension($row)->setRowHeight(20);
+                    $row++;
+                }
+
+                $lastRow = $row - 1;
+                if ($lastRow >= 2) {
+                    $sheet->getStyle("A1:H{$lastRow}")->applyFromArray([
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => Border::BORDER_THIN,
+                                'color' => ['rgb' => 'E2E8F0'],
+                            ],
+                        ],
+                    ]);
+                }
+
+                foreach (range('A', 'H') as $col) {
+                    $sheet->getColumnDimension($col)->setAutoSize(true);
+                }
+
+                $filename = 'Branch_Offices_Export_' . now()->format('Ymd_His') . '.xlsx';
+
+                return response()->streamDownload(function () use ($spreadsheet) {
+                    $writer = new Xlsx($spreadsheet);
+                    $writer->save('php://output');
+                }, $filename, [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ]);
+            })
+            ->deselectRecordsAfterCompletion();
     }
 
     public static function getRelations(): array

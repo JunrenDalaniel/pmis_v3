@@ -36,7 +36,9 @@ class RodStatusResource extends Resource
 
     protected static ?string $pluralModelLabel = 'ROD Statuses';
 
-    protected static ?string $recordTitleAttribute = 'name';
+    // protected static ?string $recordTitleAttribute = 'name';
+
+    protected static bool $isGloballySearchable = false;
 
     public static function form(Schema $schema): Schema
     {

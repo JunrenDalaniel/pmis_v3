@@ -24,11 +24,17 @@ class ApplicationStatusSeeder extends Seeder
             ['name' => 'For ROD', 'code' => 'for_rod', 'color' => 'primary', 'sort_order' => 6],
             ['name' => 'ROD Paid', 'code' => 'rod_paid', 'color' => 'success', 'sort_order' => 7],
             ['name' => 'ROD Released', 'code' => 'rod_released', 'color' => 'success', 'sort_order' => 8],
-            ['name' => 'For LTO', 'code' => 'for_lto', 'color' => 'info', 'sort_order' => 9],
-            ['name' => "For Assessor's", 'code' => 'for_assessors', 'color' => 'warning', 'sort_order' => 10],
-            ['name' => 'Encumbered', 'code' => 'encumbered', 'color' => 'success', 'sort_order' => 11],
-            ['name' => 'Fully Paid', 'code' => 'fully_paid', 'color' => 'success', 'sort_order' => 12],
-            ['name' => 'Deceased', 'code' => 'deceased', 'color' => 'danger', 'sort_order' => 13],
+            ['name' => 'For PPSR', 'code' => 'for_ppsr', 'color' => 'warning', 'sort_order' => 9],
+            ['name' => 'PPSR Paid', 'code' => 'ppsr_paid', 'color' => 'info', 'sort_order' => 10],
+            ['name' => 'For LTO', 'code' => 'for_lto', 'color' => 'info', 'sort_order' => 11],
+            ['name' => "For Assessor's", 'code' => 'for_assessors', 'color' => 'warning', 'sort_order' => 12],
+            ['name' => 'Encumbered', 'code' => 'encumbered', 'color' => 'success', 'sort_order' => 13],
+            ['name' => 'Fully Paid', 'code' => 'fully_paid', 'color' => 'success', 'sort_order' => 14],
+            ['name' => 'Deceased', 'code' => 'deceased', 'color' => 'danger', 'sort_order' => 15],
+            // Post-payment: Cancellation / Release of Mortgage
+            ['name' => 'Released For Self-Cancellation', 'code' => 'released_self_cancellation', 'color' => 'info', 'sort_order' => 16],
+            ['name' => 'For Cancellation', 'code' => 'for_cancellation', 'color' => 'warning', 'sort_order' => 17],
+            ['name' => 'Mortgage Released', 'code' => 'mortgage_released', 'color' => 'success', 'sort_order' => 18],
         ];
 
         foreach ($statuses as $status) {

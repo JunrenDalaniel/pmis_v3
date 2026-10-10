@@ -8,12 +8,14 @@ use Tests\TestCase;
 class ExampleTest extends TestCase
 {
     /**
-     * A basic test example.
+     * Test that the root URL redirects to the admin panel.
      */
     public function test_the_application_returns_a_successful_response(): void
     {
+        // Route '/' is registered to redirect to admin.
+        // Route matching uses URI (always '/'), not APP_URL subdirectory prefix.
         $response = $this->get('/');
 
-        $response->assertRedirect('/admin');
+        $response->assertRedirectContains('admin');
     }
 }

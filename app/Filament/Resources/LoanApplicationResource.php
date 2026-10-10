@@ -8,13 +8,21 @@ use App\Models\LoanApplication;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use ZipArchive;
+use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
@@ -91,6 +99,18 @@ class LoanApplicationResource extends Resource
     //     return ['application_no', 'member.first_name', 'member.last_name', 'member.member_no'];
     // }
 
+    public static function getCachedMember(?int $memberId): ?\App\Models\Member
+    {
+        if (! $memberId) {
+            return null;
+        }
+        static $memberCache = [];
+        if (! array_key_exists($memberId, $memberCache)) {
+            $memberCache[$memberId] = \App\Models\Member::with('branchOffice')->find($memberId);
+        }
+        return $memberCache[$memberId];
+    }
+
     public static function getFormSections(): array
     {
         return [
@@ -111,8 +131,8 @@ class LoanApplicationResource extends Resource
                             }
                             return $query;
                         })
-                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name)
-                        ->searchable(['member_no', 'first_name', 'last_name', 'middle_name'])
+                        ->getOptionLabelFromRecordUsing(fn ($record) => $record->full_name . ($record->member_no ? " ({$record->member_no})" : '') . ($record->cid ? " [CID: {$record->cid}]" : ''))
+                        ->searchable(['member_no', 'cid', 'first_name', 'last_name', 'middle_name'])
                         ->preload()
                         ->required()
                         ->live()
@@ -125,7 +145,7 @@ class LoanApplicationResource extends Resource
                             }
                         })
                         ->createOptionForm([
-                            Grid::make(3)->schema([
+                            Grid::make(4)->schema([
                                 TextInput::make('member_no')
                                     ->label('Member ID')
                                     ->placeholder('e.g. API-2026-00008')
@@ -139,6 +159,11 @@ class LoanApplicationResource extends Resource
                                     ->dehydrated()
                                     ->required()
                                     ->unique('members', 'member_no'),
+                                TextInput::make('cid')
+                                    ->label('CID')
+                                    ->placeholder('e.g. 100234')
+                                    ->prefixIcon('heroicon-o-hashtag')
+                                    ->maxLength(255),
                                 TextInput::make('first_name')
                                     ->label('First Name')
                                     ->placeholder('e.g. Juan')
@@ -235,58 +260,354 @@ class LoanApplicationResource extends Resource
                         ])
                         ->createOptionModalHeading('Add New Member'),
 
-                    // Display All Member Details Card
-                    Section::make('Complete Member Profile Information')
-                        ->description('All recorded personal identity, contact, and membership details')
+                    // Display Modern Borrower Profile Card
+                    ViewField::make('member_profile_card')
+                        ->view('filament.components.borrower-profile-card')
                         ->visible(fn ($get) => filled($get('member_id')))
-                        ->schema([
-                            Grid::make(4)->schema([
-                                Placeholder::make('member_no_disp')
-                                    ->label('Member No. (IPI No.)')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->member_no ?? '—'),
-
-                                Placeholder::make('full_name_disp')
-                                    ->label('Full Name')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->full_name ?? '—'),
-
-                                Placeholder::make('birth_date_disp')
-                                    ->label('Date of Birth')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->birth_date?->format('M d, Y') ?? '—'),
-
-                                Placeholder::make('sex_disp')
-                                    ->label('Sex')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->sex ?? '—'),
-                            ]),
-                            Grid::make(5)->schema([
-                                Placeholder::make('civil_status_disp')
-                                    ->label('Civil Status')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->civil_status ?? '—'),
-
-                                Placeholder::make('tin_disp')
-                                    ->label('TIN')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->tin ?? '—'),
-
-                                Placeholder::make('phone_disp')
-                                    ->label('Phone Number')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->phone ?? '—'),
-
-                                Placeholder::make('email_disp')
-                                    ->label('Email Address')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->email ?? '—'),
-
-                                Placeholder::make('branch_disp')
-                                    ->label('Assigned OIC Branch')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->branchOffice?->name ?? '—'),
-                            ]),
-                            Grid::make(1)->schema([
-                                Placeholder::make('address_disp')
-                                    ->label('Complete Address')
-                                    ->content(fn ($get) => \App\Models\Member::find($get('member_id'))?->address ?? '—'),
-                            ]),
-                        ]),
+                        ->columnSpanFull(),
                 ]),
 
-            // SECTION 2: Loan Application Details
+            // SECTION 2A: Financials & Identifiers
+            'financials_section' => Section::make('Loan Financials & Term Details')
+                ->description('Loan reference numbers, requested amount, and repayment schedule')
+                ->icon('heroicon-o-banknotes')
+                ->schema([
+                    Grid::make(3)->schema([
+                        TextInput::make('application_no')
+                            ->label('Application ID')
+                            ->placeholder('e.g. API-LA-2026-00008')
+                            ->default(function () {
+                                $year = date('Y');
+                                $nextId = (\App\Models\LoanApplication::max('id') ?? 0) + 1;
+                                return 'API-LA-' . $year . '-' . str_pad((string) $nextId, 5, '0', STR_PAD_LEFT);
+                            })
+                            ->disabled()
+                            ->dehydrated()
+                            ->required()
+                            ->unique(ignoreRecord: true)
+                            ->suffixAction(
+                                Action::make('copyAppId')
+                                    ->icon('heroicon-m-clipboard-document')
+                                    ->color('gray')
+                                    ->tooltip('Copy Application ID')
+                                    ->alpineClickHandler('window.navigator.clipboard.writeText($wire.get("data.application_no")); new FilamentNotification().title("Application ID copied to clipboard!").success().send();')
+                            ),
+                        Select::make('branch_office_id')
+                            ->label('Processing OIC Branch')
+                            ->options(function () {
+                                $user = auth()->user();
+                                $allowed = $user?->getAllowedBranchIds();
+                                $query = \App\Models\BranchOffice::query();
+                                if (is_array($allowed)) {
+                                    $query->whereIn('id', $allowed);
+                                }
+                                return $query->pluck('name', 'id');
+                            })
+                            ->searchable()
+                            ->preload()
+                            ->default(function () {
+                                $user = auth()->user();
+                                $allowed = $user?->getAllowedBranchIds();
+                                return (is_array($allowed) && count($allowed) > 0) ? $allowed[0] : $user?->branch_office_id;
+                            })
+                            ->disabled(function () {
+                                $user = auth()->user();
+                                $allowed = $user?->getAllowedBranchIds();
+                                return is_array($allowed) && count($allowed) === 1;
+                            })
+                            ->dehydrated()
+                            ->required(),
+                        TextInput::make('requested_amount')
+                            ->label(fn ($record) => in_array($record?->approval_status, ['Approved', 'Branch Updated'])
+                                ? 'Loan Amount (₱)'
+                                : 'Requested Loan Amount (₱)')
+                            ->helperText(fn ($record) => in_array($record?->approval_status, ['Approved', 'Branch Updated'])
+                                ? 'Official approved loan amount granted to borrower'
+                                : 'Initial loan amount requested by borrower for assessment')
+                            ->prefix('₱')
+                            ->placeholder('0.00')
+                            ->live(onBlur: true)
+                            ->formatStateUsing(fn ($state) => filled($state) ? number_format((float) str_replace(',', '', (string) $state), 2, '.', ',') : null)
+                            ->dehydrateStateUsing(fn ($state) => filled($state) ? (float) str_replace(',', '', (string) $state) : null)
+                            ->afterStateUpdated(function ($state, callable $set) {
+                                if (filled($state)) {
+                                    $numeric = (float) str_replace(',', '', (string) $state);
+                                    $set('requested_amount', number_format($numeric, 2, '.', ','));
+                                }
+                            })
+                            ->required(),
+                    ]),
+
+                    Grid::make(3)->schema([
+                        TextInput::make('loan_account_no')
+                            ->label('Loan Account Number')
+                            ->placeholder('e.g. LN-ACCT-2026-00123')
+                            ->maxLength(255)
+                            ->suffixAction(
+                                Action::make('copyAccountNo')
+                                    ->icon('heroicon-m-clipboard-document')
+                                    ->color('gray')
+                                    ->tooltip('Copy Account Number')
+                                    ->alpineClickHandler('window.navigator.clipboard.writeText($wire.get("data.loan_account_no")); new FilamentNotification().title("Account Number copied to clipboard!").success().send();')
+                            ),
+                        DatePicker::make('date_granted')
+                            ->label('Date Granted')
+                            ->native(false)
+                            ->displayFormat('M d, Y')
+                            ->live()
+                            ->maxDate(now()->addYear()),
+                        DatePicker::make('maturity_date')
+                            ->label('Maturity Date')
+                            ->native(false)
+                            ->displayFormat('M d, Y')
+                            ->minDate(fn ($get) => $get('date_granted') ?: null)
+                            ->maxDate(now()->addYears(15))
+                            ->afterOrEqual('date_granted')
+                            ->helperText('Must be on or after Date Granted.'),
+                    ]),
+
+                    Grid::make(1)->schema([
+                        Select::make('collateral_type')
+                            ->label('Mortgage Security Type')
+                            ->placeholder('Select mortgage security type')
+                            ->options([
+                                'real_estate_mortgage' => 'Real Estate Mortgage (REM)',
+                                'rem_certification' => 'Real Estate Mortgage Certification',
+                                'rem_amendment' => 'Amendment Of Real Estate Mortgage',
+                                'chattel_mortgage' => 'Chattel Mortgage (CM)',
+                                'cm_certification' => 'Chattel Mortgage Certification',
+                                'cm_amendment' => 'Amendment Of Chattel Mortgage (Requires Memorandum Approval)',
+                            ])
+                            ->disableOptionWhen(fn (string $value): bool => $value === 'cm_amendment')
+                            ->native(false)
+                            ->disabled(fn (string $operation, $record) => $operation === 'edit' && filled($record?->collateral_type))
+                            ->dehydrated()
+                            ->required()
+                            ->live()
+                            ->suffixAction(
+                                Action::make('viewMortgageGuidelines')
+                                    ->icon('heroicon-m-information-circle')
+                                    ->color('primary')
+                                    ->tooltip('View Documentary Guidelines (Slide View)')
+                                    ->modalHeading('Official Mortgage Documentary Guidelines')
+                                    ->modalDescription('Guide on mandatory documentary requirements prior to acceptance and endorsement of mortgage applications.')
+                                    ->modalContent(fn ($get) => view('filament.modals.mortgage-guidelines-modal', [
+                                        'collateralType' => $get('collateral_type'),
+                                    ]))
+                                    ->modalSubmitAction(false)
+                                    ->modalCancelActionLabel('Close')
+                                    ->slideOver()
+                                    ->modalWidth('6xl')
+                            ),
+                    ]),
+                ]),
+
+            // SECTION 2B: Collateral Quick Snapshot
+            'collateral_summary_section' => Section::make('Registered Collateral Snapshot')
+                ->description('Active collaterals linked to this loan application')
+                ->icon('heroicon-o-shield-check')
+                ->visible(fn ($record) => filled($record?->id))
+                ->collapsible()
+                ->schema([
+                    Placeholder::make('collateral_snapshot_content')
+                        ->hiddenLabel()
+                        ->content(function ($record) {
+                            if (! $record) return null;
+                            $chattels = $record->chattelCollaterals;
+                            $rems = $record->realEstateCollaterals;
+
+                            if ($chattels->isEmpty() && $rems->isEmpty()) {
+                                return new \Illuminate\Support\HtmlString("
+                                    <div class='text-xs text-gray-500 py-1.5 italic'>
+                                        No collateral recorded yet. You can add collaterals in the <b>Collateral Information</b> tab.
+                                    </div>
+                                ");
+                            }
+
+                            $html = "<div class='space-y-2 text-xs'>";
+                            foreach ($chattels as $c) {
+                                $plate = $c->plate_no ?: ($c->mv_file_no ?: 'No Plate');
+                                $desc = ($c->year_model ? "{$c->year_model} " : '') . ($c->vehicle_description ?: 'Vehicle');
+                                $renDate = $c->registration_renewal_date ? $c->registration_renewal_date->format('M d, Y') : 'No Date';
+                                $html .= "
+                                    <div class='flex items-center justify-between p-2.5 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800'>
+                                        <div>
+                                            <span class='font-bold text-gray-900 dark:text-gray-100'>🚗 {$plate}</span>
+                                            <span class='text-gray-600 dark:text-gray-400 ml-2'>{$desc}</span>
+                                        </div>
+                                        <div class='text-right'>
+                                            <span class='text-[10px] text-gray-400 block'>LTO Renewal: {$renDate}</span>
+                                            <span class='px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'>{$c->encumbered_to}</span>
+                                        </div>
+                                    </div>
+                                ";
+                            }
+
+                            foreach ($rems as $r) {
+                                $tct = $r->tct_oct_no ?: 'No Title No.';
+                                $lot = $r->lot_no ? "Lot {$r->lot_no}" : '';
+                                $blk = $r->block_no ? "Blk {$r->block_no}" : '';
+                                $loc = $r->location ?: 'Location not specified';
+                                $html .= "
+                                    <div class='flex items-center justify-between p-2.5 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800'>
+                                        <div>
+                                            <span class='font-bold text-gray-900 dark:text-gray-100'>🏠 Title # {$tct}</span>
+                                            <span class='text-gray-600 dark:text-gray-400 ml-2'>{$lot} {$blk} • {$loc}</span>
+                                        </div>
+                                        <div class='text-right'>
+                                            <span class='px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'>{$r->rem_status}</span>
+                                        </div>
+                                    </div>
+                                ";
+                            }
+                            $html .= "</div>";
+
+                            return new \Illuminate\Support\HtmlString($html);
+                        })
+                        ->columnSpanFull(),
+                ]),
+
+            // SECTION 2C: Workflow & Evaluation Routing
+            'workflow_status_section' => Section::make('Workflow & Evaluation Status')
+                ->description('Application approval routing, stage pipeline, and condition')
+                ->icon('heroicon-o-arrow-path')
+                ->schema([
+                    Select::make('approval_status')
+                        ->label('Approval Status')
+                        ->options([
+                            'Pending Approval' => '⏳ Pending Approval (For Evaluation)',
+                            'Approved'         => '🟢 Approved (Loan Released)',
+                            'Branch Updated'   => '🔔 Branch Updated (Awaiting HO Review)',
+                            'Disapproved'      => '🔴 Disapproved (Deficiencies)',
+                        ])
+                        ->default('Pending Approval')
+                        ->disabled(fn (string $operation) => $operation === 'create' || (
+                            auth()->user()?->isBranchUser()
+                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
+                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
+                        ))
+                        ->dehydrated()
+                        ->required(),
+
+                    Select::make('status')
+                        ->label('Application Stage')
+                        ->options(function ($get) {
+                            $collateralType = $get('collateral_type');
+
+                            $query = \App\Models\ApplicationStatus::query()
+                                ->where('is_active', true)
+                                ->orderBy('sort_order');
+
+                            if (in_array($collateralType, ['cm_certification', 'rem_certification'])) {
+                                $allowed = ['Initial Assessment', 'For Notary', 'Notarized', 'Fully Paid', 'Deceased'];
+                                $query->whereIn('name', $allowed);
+                            } elseif ($collateralType === 'cm_amendment') {
+                                $allowed = ['Initial Assessment', 'For Notary', 'Notarized', 'For BIR', 'For Bir', 'BIR Paid', 'Bir Paid', 'For PPSR', 'PPSR Paid', 'Fully Paid', 'Deceased', 'Released For Self-Cancellation', 'For Cancellation', 'Mortgage Released'];
+                                $query->whereIn('name', $allowed);
+                            } elseif (in_array($collateralType, ['real_estate_mortgage', 'rem_amendment'])) {
+                                $query->whereNotIn('name', ['For PPSR', 'For Ppsr', 'PPSR Paid', 'Ppsr Paid', 'For LTO', 'For Lto']);
+                            } elseif ($collateralType === 'chattel_mortgage') {
+                                $query->whereNotIn('name', ['For ROD', 'For Rod', 'ROD Paid', 'Rod Paid', 'ROD Released', 'Rod Released', "For Assessor's"]);
+                            }
+
+                            return $query->get()->mapWithKeys(fn ($item) => [$item->name => "{$item->sort_order}. {$item->name}"]);
+                        })
+                        ->live()
+                        ->default('Initial Assessment')
+                        ->required(),
+
+                    Select::make('sub_status')
+                        ->label('Stage Condition / Sub-Status')
+                        ->options([
+                            'none'                => '🟢 On Process (Standard)',
+                            'internal_deficiency' => '🏢 Internal Deficiency',
+                            'external_deficiency' => '🏛️ External Deficiency',
+                        ])
+                        ->default('none')
+                        ->disabled(fn () => (
+                            auth()->user()?->isBranchUser()
+                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
+                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
+                        ))
+                        ->helperText(fn () => (
+                            auth()->user()?->isBranchUser()
+                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
+                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
+                        ) ? '🔒 Stage condition / sub-status is strictly managed by Head Office Evaluators.' : null)
+                        ->dehydrated()
+                        ->live()
+                        ->required(),
+
+                    Textarea::make('deficiency_notes')
+                        ->label('Deficiency Findings / Requirements')
+                        ->placeholder('Specify missing requirements, discrepancy details, or instructions for compliance...')
+                        ->rows(3)
+                        ->autosize()
+                        ->visible(fn ($get) => in_array($get('sub_status'), ['internal_deficiency', 'external_deficiency']))
+                        ->columnSpanFull(),
+                ]),
+
+            // SECTION 2D: Evaluator Findings & Specific Remarks
+            'evaluator_notes_section' => Section::make('Evaluator Findings & Remarks')
+                ->description('Head Office evaluation findings, deficiency remarks, or specific instructions')
+                ->icon('heroicon-o-pencil-square')
+                ->schema([
+                    Textarea::make('notes')
+                        ->label('Application Notes / Remarks (Head Office Assessment)')
+                        ->placeholder('Enter official assessment notes, specific findings, or instructions...')
+                        ->autosize()
+                        ->disabled(fn () => (
+                            auth()->user()?->isBranchUser()
+                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
+                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
+                        ))
+                        ->dehydrated()
+                        ->helperText(fn () => (
+                            auth()->user()?->isBranchUser()
+                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
+                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
+                        ) ? '🔒 Official assessment remarks are strictly managed by Head Office Evaluators.' : null)
+                        ->columnSpanFull(),
+                ]),
+
+            // SECTION 2F: Comment / Conversation Thread
+            'comments_section' => Section::make('Comment / Conversation Thread')
+                ->description('Evaluation remarks, deficiency notes, and branch compliance thread')
+                ->icon('heroicon-o-chat-bubble-left-right')
+                ->collapsible()
+                ->collapsed()
+                ->compact()
+                ->visible(fn ($record) => filled($record?->id))
+                ->schema([
+                    Placeholder::make('notes_history_content')
+                        ->hiddenLabel()
+                        ->content(function ($record) {
+                            if (! $record) {
+                                return null;
+                            }
+
+                            $notes = $record->applicationNotes()->with(['user.role'])->oldest()->get();
+
+                            return new \Illuminate\Support\HtmlString(
+                                view('filament.components.comment-timeline', [
+                                    'notes'  => $notes,
+                                    'record' => $record,
+                                ])->render()
+                            );
+                        })
+                        ->columnSpanFull(),
+
+                    Textarea::make('branch_comment')
+                        ->label('Add Comment / Reply')
+                        ->placeholder('Type your comment, compliance update, or response here...')
+                        ->autosize()
+                        ->dehydrated(false)
+                        ->afterStateHydrated(fn (Textarea $component) => $component->state(''))
+                        ->helperText('💬 Comments entered here will be added to the conversation thread above upon saving.')
+                        ->columnSpanFull(),
+                ]),
+
+            // Full original Loan Application Details section for Create Wizard & standard forms
             'loan_details_section' => Section::make('Loan Application Details')
                 ->description('Loan reference number, requested amount, branch, and status')
                 ->icon('heroicon-o-banknotes')
@@ -395,7 +716,22 @@ class LoanApplicationResource extends Resource
                             ->disabled(fn (string $operation, $record) => $operation === 'edit' && filled($record?->collateral_type))
                             ->dehydrated()
                             ->required()
-                            ->live(),
+                            ->live()
+                            ->suffixAction(
+                                Action::make('viewMortgageGuidelines')
+                                    ->icon('heroicon-m-information-circle')
+                                    ->color('primary')
+                                    ->tooltip('View Documentary Guidelines & Requirements (Slide View)')
+                                    ->modalHeading('Official Mortgage Documentary Guidelines (REM & CM Requirements)')
+                                    ->modalDescription('Official guide on mandatory documentary requirements (23 REM Requirements & 25 CM Requirements) prior to acceptance and endorsement.')
+                                    ->modalContent(fn ($get) => view('filament.modals.mortgage-guidelines-modal', [
+                                        'collateralType' => $get('collateral_type'),
+                                    ]))
+                                    ->modalSubmitAction(false)
+                                    ->modalCancelActionLabel('Close')
+                                    ->slideOver()
+                                    ->modalWidth('6xl')
+                            ),
                         Select::make('approval_status')
                             ->label('Approval Status')
                             ->options([
@@ -460,76 +796,6 @@ class LoanApplicationResource extends Resource
                             || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
                             || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
                         ) ? '🔒 Official assessment remarks are strictly managed by Head Office Evaluators.' : null)
-                        ->columnSpanFull(),
-
-                    Section::make('Comment / Conversation Thread')
-                        ->description('Evaluation remarks, deficiency notes, and branch compliance thread')
-                        ->icon('heroicon-o-chat-bubble-left-right')
-                        ->collapsible()
-                        ->collapsed()
-                        ->compact()
-                        ->visible(fn ($record) => filled($record?->id))
-                        ->schema([
-                            Placeholder::make('notes_history_content')
-                                ->hiddenLabel()
-                                ->content(function ($record) {
-                                    if (! $record) {
-                                        return null;
-                                    }
-
-                                    $notes = $record->applicationNotes()->with(['user.role'])->oldest()->get();
-
-                                    if ($notes->isEmpty()) {
-                                        return new \Illuminate\Support\HtmlString('<div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 italic">No comments in thread yet. Type a comment below and click Save to post a response.</div>');
-                                    }
-
-                                    $html = '<div class="space-y-3.5 max-h-[32rem] overflow-y-auto pr-1.5 py-1.5">';
-                                    foreach ($notes as $n) {
-                                        $date = $n->created_at ? $n->created_at->format('M d, Y • h:i A') : 'N/A';
-                                        $timeAgo = $n->created_at ? $n->created_at->diffForHumans() : '';
-                                        $author = e($n->user?->name ?? 'System');
-                                        $role = e($n->user?->role?->name ?? 'Staff');
-                                        $stage = e($n->stage ?? 'Comment');
-                                        $noteContent = nl2br(e($n->note));
-
-                                        $isBranch = str_contains($stage, 'Branch') || str_contains(strtolower($role), 'document specialist') || str_contains(strtolower($role), 'branch');
-
-                                        $borderLeft = $isBranch ? 'border-l-4 border-amber-500' : 'border-l-4 border-blue-500';
-                                        $badgeStyle = $isBranch ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800/50' : 'bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border border-blue-300/60 dark:border-blue-800/50';
-
-                                        $html .= "
-                                            <div class='p-4 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 {$borderLeft} shadow-xs space-y-2.5'>
-                                                <div class='flex items-center justify-between flex-wrap gap-2 text-xs'>
-                                                    <div class='flex items-center flex-wrap gap-2'>
-                                                        <span class='font-bold text-slate-900 dark:text-slate-100 text-sm'>👤 {$author}</span>
-                                                        <span class='px-2 py-0.5 rounded-full text-[11px] font-semibold {$badgeStyle}'>{$role}</span>
-                                                        <span class='px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'>{$stage}</span>
-                                                    </div>
-                                                    <div class='text-[11px] text-slate-500 dark:text-slate-400 font-mono'>
-                                                        ⏱️ {$date} <span class='text-slate-400 dark:text-slate-500'>({$timeAgo})</span>
-                                                    </div>
-                                                </div>
-                                                <div class='text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-950/80 p-3 rounded-lg border border-slate-200/80 dark:border-slate-800/80 leading-relaxed font-sans'>
-                                                    {$noteContent}
-                                                </div>
-                                            </div>
-                                        ";
-                                    }
-                                    $html .= '</div>';
-
-                                    return new \Illuminate\Support\HtmlString($html);
-                                })
-                                ->columnSpanFull(),
-
-                            Textarea::make('branch_comment')
-                                ->label('Add Comment / Reply')
-                                ->placeholder('Type your comment, compliance update, or response here...')
-                                ->autosize()
-                                ->dehydrated(false)
-                                ->afterStateHydrated(fn (Textarea $component) => $component->state(''))
-                                ->helperText('💬 Comments entered here will be added to the conversation thread above upon saving.')
-                                ->columnSpanFull(),
-                        ])
                         ->columnSpanFull(),
                 ]),
 
@@ -640,7 +906,24 @@ class LoanApplicationResource extends Resource
                                 TextInput::make('plate_no')
                                     ->label('Plate No.')
                                     ->placeholder('e.g. ABC-1234')
-                                    ->required(),
+                                    ->required()
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(function ($state, callable $set) {
+                                        if (blank($state)) return;
+                                        $monthVal = \App\Models\ChattelCollateral::computeRenewalMonthFromPlate($state);
+                                        if ($monthVal) {
+                                            $set('registration_renewal_date', $monthVal);
+
+                                            $c = \Carbon\Carbon::parse($monthVal . '-01')->startOfMonth();
+                                            if ($c->isPast()) {
+                                                $set('cm_status', 'Expired');
+                                            } elseif ($c->diffInDays(now()) <= 30) {
+                                                $set('cm_status', 'Due for Renewal');
+                                            } else {
+                                                $set('cm_status', 'Active');
+                                            }
+                                        }
+                                    }),
                             ]),
                             Grid::make(3)->schema([
                                 TextInput::make('engine_no')
@@ -673,6 +956,20 @@ class LoanApplicationResource extends Resource
                                 TextInput::make('registration_renewal_date')
                                     ->label('Registration Renewal Date')
                                     ->type('month')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(function ($state, callable $set) {
+                                        if (blank($state)) return;
+                                        try {
+                                            $c = \Carbon\Carbon::parse($state)->startOfMonth();
+                                            if ($c->isPast()) {
+                                                $set('cm_status', 'Expired');
+                                            } elseif ($c->diffInDays(now()) <= 30) {
+                                                $set('cm_status', 'Due for Renewal');
+                                            } else {
+                                                $set('cm_status', 'Active');
+                                            }
+                                        } catch (\Throwable $e) {}
+                                    })
                                     ->formatStateUsing(function ($state) {
                                         if (blank($state)) return null;
                                         try {
@@ -689,7 +986,13 @@ class LoanApplicationResource extends Resource
                                             return null;
                                         }
                                     })
-                                    ->helperText('Month & Year only'),
+                                    ->helperText(function (callable $get) {
+                                        $plate = $get('plate_no');
+                                        $desc = \App\Models\ChattelCollateral::getLtoScheduleDescription($plate);
+                                        return $desc
+                                            ? "⚡ Auto: {$desc} (Maaaring i-adjust manwal)"
+                                            : 'Month & Year only';
+                                    }),
                                 Select::make('cm_status')
                                     ->label('Vehicle Status')
                                     ->options([
@@ -711,7 +1014,7 @@ class LoanApplicationResource extends Resource
 
             // SECTION 4: Documentation Uploads
             'document_section' => Section::make('Documentation Requirements Uploads')
-                ->description('Uploaded scanned documentation files (.jpg, .png, .pdf)')
+                ->description('Uploaded scanned documentation files (.pdf, .jpg, .jpeg, .png only)')
                 ->icon('heroicon-o-document-arrow-up')
                 ->collapsible()
                 ->headerActions([
@@ -729,31 +1032,20 @@ class LoanApplicationResource extends Resource
                             'record' => $record,
                         ]))
                         ->visible(fn ($record) => $record && $record->getMedia('*')->isNotEmpty()),
-                    Action::make('openPhotoLightbox')
-                        ->label('Photo Lightbox')
-                        ->icon('heroicon-o-photo')
-                        ->color('warning')
-                        ->modalWidth('6xl')
-                        ->modalHeading(fn ($record): string => "Photo Lightbox Gallery — " . ($record?->application_no ?? 'Loan Photos') . ($record?->member ? " ({$record->member->full_name})" : ''))
-                        ->modalDescription('Full-screen interactive photo lightbox with zoom, 90° rotate, flip, and carousel slider')
-                        ->modalSubmitAction(false)
-                        ->modalCancelActionLabel('Close Lightbox')
-                        ->modalContent(fn ($record) => view('filament.modals.photo-lightbox-modal', [
-                            'record' => $record,
-                        ]))
-                        ->visible(function ($record) {
-                            if (!$record) return false;
-                            return $record->getMedia('*')->filter(function ($m) {
-                                $mime = $m->mime_type ?? '';
-                                $ext = strtolower(pathinfo($m->file_name, PATHINFO_EXTENSION));
-                                return str_starts_with($mime, 'image/') || in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif']);
-                            })->isNotEmpty();
-                        }),
+                    static::getQuickUploadTableAction()
+                        ->visible(fn ($record) => (bool) $record),
                 ])
                 ->schema([
                     \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('spatie_documents')
-                        ->label('Upload Document Files (PNG, JPG, JPEG, PDF)')
+                        ->label('Upload Document Files (PDF, JPG, PNG, WebP)')
                         ->collection('loan_application_documents')
+                        ->disk('public')
+                        ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'image/webp'])
+                        ->imageResizeMode('contain')
+                        ->imageResizeTargetWidth('1200')
+                        ->imageResizeTargetHeight('1200')
+                        ->imageResizeUpscale(false)
+                        ->helperText('Strictly allowed file formats: .pdf, .jpg, .jpeg, .png, .webp (Images auto-resized to 1200px max for fast saving)')
                         ->preserveFilenames()
                         ->multiple()
                         ->reorderable()
@@ -761,7 +1053,13 @@ class LoanApplicationResource extends Resource
                         ->downloadable()
                         ->panelLayout('grid')
                         ->imagePreviewHeight('180px')
-                        ->columnSpanFull(),
+                        ->columnSpanFull()
+                        ->required(fn (string $operation): bool => $operation === 'create')
+                        ->minFiles(fn (string $operation): ?int => $operation === 'create' ? 1 : null)
+                        ->validationMessages([
+                            'required' => 'Please upload at least one scanned document (.pdf, .jpg, .jpeg, .png, or .webp).',
+                            'minFiles' => 'Please upload at least one scanned document (.pdf, .jpg, .jpeg, .png, or .webp).',
+                        ]),
                 ]),
 
             // SECTION 5: Document Processing Tracker
@@ -769,7 +1067,6 @@ class LoanApplicationResource extends Resource
                 ->description('Track document movement through each government agency — Notary, BIR, ROD, LTO, Assessor\'s, and Encumbrance registration')
                 ->icon('heroicon-o-clipboard-document-check')
                 ->collapsible()
-                ->visible(fn ($record) => $record && $record->approval_status === 'Approved')
                 ->schema([
 
                     // ── NOTARY ──────────────────────────────────────────────
@@ -785,6 +1082,21 @@ class LoanApplicationResource extends Resource
                                 DatePicker::make('notarized_date')
                                     ->label('Date Notarized'),
                             ]),
+                            Grid::make(['default' => 2, 'md' => 4])->schema([
+                                TextInput::make('notary_doc_no')
+                                    ->label('Doc. No.')
+                                    ->placeholder('e.g. 142'),
+                                TextInput::make('notary_page_no')
+                                    ->label('Page No.')
+                                    ->placeholder('e.g. 29'),
+                                TextInput::make('notary_book_no')
+                                    ->label('Book No.')
+                                    ->placeholder('e.g. XII or 15'),
+                                TextInput::make('notary_series_no')
+                                    ->label('Series of')
+                                    ->placeholder('e.g. ' . now()->year)
+                                    ->default(fn () => (string) now()->year),
+                            ]),
                         ]),
 
                     // ── BIR ─────────────────────────────────────────────────
@@ -792,14 +1104,12 @@ class LoanApplicationResource extends Resource
                         ->icon('heroicon-o-building-office')
                         ->compact()
                         ->collapsible()
+                        ->visible(fn ($get) => in_array($get('collateral_type'), ['real_estate_mortgage', 'rem_amendment', 'chattel_mortgage', 'cm_amendment']))
                         ->schema([
-                            Grid::make(['default' => 1, 'md' => 3])->schema([
+                            Grid::make(['default' => 1, 'md' => 2])->schema([
                                 TextInput::make('bir_reference_no')
                                     ->label('eFPS Reference Number')
                                     ->placeholder('e.g. 652600074997564'),
-                                TextInput::make('bir_bank_confirmation_no')
-                                    ->label('Bank Confirmation / Ref Number')
-                                    ->placeholder('e.g. 00301037260910838464'),
                                 TextInput::make('bir_amount_paid')
                                     ->label('DST Amount Paid (₱)')
                                     ->prefix('₱')
@@ -815,24 +1125,24 @@ class LoanApplicationResource extends Resource
                         ->collapsible()
                         ->visible(fn ($get) => in_array($get('collateral_type'), ['real_estate_mortgage', 'rem_amendment']))
                         ->schema([
-                            Grid::make(['default' => 1, 'md' => 3])->schema([
+                            Grid::make(['default' => 1, 'md' => 2])->schema([
+                                Select::make('current_rod_status_id')
+                                    ->label('ROD Processing Status')
+                                    ->relationship('currentRodStatus', 'name', fn ($query) => $query->orderBy('step_number'))
+                                    ->placeholder('Select ROD Status')
+                                    ->searchable()
+                                    ->preload()
+                                    ->helperText('Current stage in ROD / LRA LOTS workflow'),
                                 TextInput::make('rod_entry_no')
-                                    ->label('Ref No.:')
+                                    ->label('Ref No. / EPEB Entry #:')
                                     ->placeholder('e.g. EPEB496/2026001432 or 1038896086'),
                                 DatePicker::make('rod_payment_date')
-                                    ->label('Date of Payment:'),
+                                    ->label('Date of Payment / Registration:'),
                                 TextInput::make('rod_amount_paid')
                                     ->label('ROD Amount Paid (₱):')
                                     ->prefix('₱')
                                     ->placeholder('0.00')
                                     ->numeric(),
-                            ]),
-                            Grid::make(['default' => 1, 'md' => 2])->schema([
-                                TextInput::make('rod_release_entry_no')
-                                    ->label('Release Entry #:')
-                                    ->placeholder('e.g. 2026-0005678'),
-                                DatePicker::make('rod_release_date')
-                                    ->label('Release Entry Date:'),
                             ]),
                         ]),
 
@@ -841,27 +1151,18 @@ class LoanApplicationResource extends Resource
                         ->icon('heroicon-o-shield-check')
                         ->compact()
                         ->collapsible()
-                        ->visible(fn ($get) => in_array($get('collateral_type'), ['chattel_mortgage', 'cm_certification', 'cm_amendment']))
+                        ->visible(fn ($get) => in_array($get('collateral_type'), ['chattel_mortgage', 'cm_amendment']))
                         ->schema([
                             Grid::make(['default' => 1, 'md' => 2])->schema([
                                 TextInput::make('ppsr_notice_no')
                                     ->label('Notice Registration #:')
                                     ->placeholder('e.g. PPSR-260724001343'),
-                                TextInput::make('ppsr_receipt_no')
-                                    ->label('Receipt / Ref #:')
-                                    ->placeholder('e.g. 8771-08012026-863793'),
-                            ]),
-                            Grid::make(['default' => 1, 'md' => 3])->schema([
+                                DatePicker::make('ppsr_initial_notice_date')
+                                    ->label('Initial Notice Registration Date'),
+                                DatePicker::make('ppsr_ctc_notice_date')
+                                    ->label('Certified True Copy of Notice Registration Date'),
                                 DatePicker::make('ppsr_payment_date')
                                     ->label('Date of Payment / Registration:'),
-                                TextInput::make('ppsr_amount_paid')
-                                    ->label('PPSR Amount Paid (₱):')
-                                    ->prefix('₱')
-                                    ->placeholder('0.00')
-                                    ->numeric(),
-                                TextInput::make('ppsr_transaction_no')
-                                    ->label('Transaction Number:')
-                                    ->placeholder('e.g. TRN-260724002410'),
                             ]),
                         ]),
 
@@ -870,26 +1171,25 @@ class LoanApplicationResource extends Resource
                         ->icon('heroicon-o-truck')
                         ->compact()
                         ->collapsible()
-                        ->visible(fn ($get) => in_array($get('collateral_type'), ['chattel_mortgage', 'cm_certification', 'cm_amendment']))
+                        ->visible(fn ($get) => $get('collateral_type') === 'chattel_mortgage')
                         ->schema([
-                            Grid::make(2)->schema([
+                            Grid::make(['default' => 1, 'md' => 2])->schema([
                                 TextInput::make('lto_office')
                                     ->label('LTO Office')
                                     ->placeholder('e.g. LTO CDO Extension Office'),
-                                DatePicker::make('lto_payment_date')
-                                    ->label('Date Paid'),
-                            ]),
-                            Grid::make(3)->schema([
                                 TextInput::make('lto_or_no')
                                     ->label('Official Receipt No. (OR No.)')
                                     ->placeholder('e.g. OR-2026-009876'),
+                                DatePicker::make('lto_payment_date')
+                                    ->label('Date Paid / Registered'),
                                 TextInput::make('lto_amount_paid')
                                     ->label('Amount Paid (₱)')
                                     ->prefix('₱')
                                     ->placeholder('0.00')
                                     ->numeric(),
                                 DatePicker::make('lto_release_date')
-                                    ->label('Date Released / Returned'),
+                                    ->label('Date Released / Returned to Branch')
+                                    ->columnSpan(['default' => 1, 'md' => 2]),
                             ]),
                         ]),
 
@@ -912,21 +1212,198 @@ class LoanApplicationResource extends Resource
                             ]),
                         ]),
 
-                    // ── ENCUMBERED ────────────────────────────────────────────
-                    Section::make('Encumbrance Registration')
+                    // ── ENCUMBRANCE, VAULT & MORTGAGE RELEASE ────────────────
+                    Section::make('🔒 Encumbrance, Vault Custody & Mortgage Release')
+                        ->description('Collateral annotation, physical vault custody location, and discharge of mortgage upon full payment')
                         ->icon('heroicon-o-lock-closed')
                         ->compact()
                         ->collapsible()
+                        ->visible(fn ($get) => in_array($get('collateral_type'), ['real_estate_mortgage', 'chattel_mortgage', 'rem_amendment', 'cm_amendment']))
                         ->schema([
-                            Grid::make(2)->schema([
-                                DatePicker::make('encumbered_date')
-                                    ->label('Date Encumbered / Annotated'),
-                                TextInput::make('annotation_no')
-                                    ->label('Annotation / Entry No.')
-                                    ->placeholder('e.g. 2026-ANN-00123'),
-                            ]),
+                            // Active Loan: Encumbrance & Custody
+                            Section::make('Active Loan: Encumbrance & Physical Custody')
+                                ->icon('heroicon-o-key')
+                                ->compact()
+                                ->schema([
+                                    Grid::make(['default' => 1, 'md' => 3])->schema([
+                                        DatePicker::make('encumbered_date')
+                                            ->label('Date Encumbered / Annotated')
+                                            ->helperText('Date annotation recorded on Title/CR'),
+                                        TextInput::make('annotation_no')
+                                            ->label('Annotation / Entry No.')
+                                            ->placeholder('e.g. 2026-ANN-00123'),
+                                        TextInput::make('vault_location')
+                                            ->label('Vault / Custody Location')
+                                            ->placeholder('e.g. HO Vault Box #4 / Branch Safe A')
+                                            ->helperText('Physical envelope/box location in vault'),
+                                    ]),
+                                ]),
+
+                            // Completed Loan: Mortgage Cancellation & Title Return
+                            Section::make('Fully Paid: Cancellation of Mortgage & Title Return')
+                                ->description('Collateral discharge handling: Member self-cancellation at ROD/LTO or office-assisted cancellation')
+                                ->icon('heroicon-o-arrow-top-right-on-square')
+                                ->compact()
+                                ->schema([
+                                    Grid::make(['default' => 1, 'md' => 3])->schema([
+                                        Select::make('mortgage_release_status')
+                                            ->label('Mortgage Release Status')
+                                            ->options([
+                                                'active'                     => '🔒 Active / Encumbered (In Custody)',
+                                                'released_self_cancellation' => '👤 Released to Member (Self-Cancellation sa ROD/LTO)',
+                                                'for_cancellation'           => '⏳ For Cancellation / Office In-Progress (Gisalig sa Opisina)',
+                                                'cancelled_released'         => '✅ Cancelled & Title Returned to Member',
+                                            ])
+                                            ->default('active')
+                                            ->native(false)
+                                            ->live(),
+                                        Radio::make('cancellation_mode')
+                                            ->label('Cancellation Handling / Processing Mode')
+                                            ->options([
+                                                'member' => '👤 Member-Handled (Si Member ang maglalakad sa ROD/LTO)',
+                                                'coop'   => '🏢 Office-Assisted (Gisalig sa Opisina / Tayo ang maglalakad)',
+                                            ])
+                                            ->default('member')
+                                            ->afterStateHydrated(function ($component, $state) {
+                                                if (blank($state)) {
+                                                    $component->state('member');
+                                                }
+                                            })
+                                            ->live()
+                                            ->columnSpan(['default' => 1, 'md' => 2]),
+                                    ]),
+
+                                    Grid::make(['default' => 1, 'md' => 2])->schema([
+                                        TextInput::make('clearance_no')
+                                            ->label('Full Payment Clearance / Cert #')
+                                            ->placeholder('e.g. CFP-2026-00123')
+                                            ->helperText('Accounting clearance proving zero-balance'),
+                                        TextInput::make('title_release_remarks')
+                                            ->label('Release Remarks / Acknowledgment Slip #')
+                                            ->placeholder('e.g. AR #88219, Owner\'s duplicate copy received in good order'),
+                                    ]),
+
+                                    // ── If Member-Handled (Self-Processing) ──
+                                    Section::make('👤 Documents Issued to Member for Self-Cancellation (Turn-Over Checklist)')
+                                        ->description('Check off the original documents handed over to the member or authorized representative')
+                                        ->compact()
+                                        ->visible(fn ($get) => ($get('cancellation_mode') ?? 'member') === 'member')
+                                        ->schema([
+                                            Grid::make(['default' => 1, 'md' => 2])->schema([
+                                                Checkbox::make('is_title_returned')
+                                                    ->label('Owner\'s Duplicate Title (TCT/OCT/CCT) or Original LTO OR/CR returned'),
+                                                Checkbox::make('is_cancellation_deed_returned')
+                                                    ->label('Duly Notarized Deed of Release / Cancellation of Mortgage'),
+                                                Checkbox::make('is_sec_cert_returned')
+                                                    ->label('Secretary\'s Certificate / Board Resolution + Signatory IDs'),
+                                                Checkbox::make('is_promissory_note_returned')
+                                                    ->label('Original Promissory Note (Marked CANCELLED / PAID)'),
+                                            ]),
+                                            Grid::make(['default' => 1, 'md' => 4])->schema([
+                                                DatePicker::make('title_released_date')
+                                                    ->label('Date Documents Released')
+                                                    ->helperText('Date handed to member'),
+                                                Select::make('claimant_type')
+                                                    ->label('Receiver Type')
+                                                    ->options([
+                                                        'borrower'       => '👤 Borrower Himself/Herself',
+                                                        'authorized_rep' => '👥 Authorized Representative (with SPA)',
+                                                    ])
+                                                    ->default('borrower')
+                                                    ->live(),
+                                                TextInput::make('title_released_to')
+                                                    ->label('Receiver Full Name')
+                                                    ->placeholder('e.g. Juan Dela Cruz'),
+                                                TextInput::make('rep_id_details')
+                                                    ->label('Valid ID Presented')
+                                                    ->placeholder('e.g. PhilSys ID #1234-5678-9012'),
+                                            ]),
+                                            Grid::make(['default' => 1, 'md' => 2])->schema([
+                                                TextInput::make('rep_spa_details')
+                                                    ->label('SPA Details (if Representative)')
+                                                    ->placeholder('e.g. Notarized SPA dated Oct 01, 2026 by Atty. Santos')
+                                                    ->visible(fn ($get) => $get('claimant_type') === 'authorized_rep'),
+                                                TextInput::make('title_released_by')
+                                                    ->label('Released By (Custodian Staff)')
+                                                    ->placeholder('e.g. Maria Santos (Vault Custodian)'),
+                                            ]),
+                                        ]),
+
+                                    // ── If Office-Assisted (Coop Processing) ──
+                                    Section::make('🏢 Office ROD / LTO Cancellation Processing (Gisalig sa Opisina)')
+                                        ->description('Recorded when the cooperative/company processes the cancellation at ROD / LTO')
+                                        ->compact()
+                                        ->visible(fn ($get) => $get('cancellation_mode') === 'coop')
+                                        ->schema([
+                                            Grid::make(['default' => 1, 'md' => 4])->schema([
+                                                DatePicker::make('cancellation_date')
+                                                    ->label('Date Cancellation Filed'),
+                                                TextInput::make('cancellation_entry_no')
+                                                    ->label('Cancellation Entry / EPEB #')
+                                                    ->placeholder('e.g. 2026-CAN-00045'),
+                                                TextInput::make('cancellation_or_no')
+                                                    ->label('ROD Cancellation OR #')
+                                                    ->placeholder('e.g. OR-ROD-88912'),
+                                                TextInput::make('cancellation_fee')
+                                                    ->label('Cancellation Fee (₱)')
+                                                    ->prefix('₱')
+                                                    ->numeric()
+                                                    ->placeholder('0.00'),
+                                            ]),
+                                            Grid::make(['default' => 1, 'md' => 3])->schema([
+                                                DatePicker::make('title_released_date')
+                                                    ->label('Date Title Returned to Member'),
+                                                TextInput::make('title_released_to')
+                                                    ->label('Received By (Member Name)')
+                                                    ->placeholder('e.g. Juan Dela Cruz'),
+                                                TextInput::make('title_released_by')
+                                                    ->label('Released By (Custodian Staff)')
+                                                    ->placeholder('e.g. Maria Santos (Vault Custodian)'),
+                                            ]),
+                                        ]),
+                                ]),
                         ]),
                 ]),
+
+            // SECTION 6: Audit History & Activity Timeline
+            'audit_timeline_section' => Section::make('🕒 Audit Trail & Activity Timeline')
+                ->description('Chronological record of status changes, approvals, field edits, and user actions')
+                ->icon('heroicon-o-clock')
+                ->collapsible()
+                ->collapsed()
+                ->visible(fn ($record) => (bool) $record)
+                ->schema([
+                    ViewField::make('activity_timeline')
+                        ->view('filament.components.loan-activity-timeline')
+                        ->columnSpanFull(),
+                ]),
+        ];
+    }
+
+    public static function getCreateWizardSteps(): array
+    {
+        $sections = static::getFormSections();
+
+        return [
+            Step::make('Members Info')
+                ->icon('heroicon-o-user')
+                ->description('Select borrower member')
+                ->schema([$sections['member_section']]),
+
+            Step::make('Loan Application')
+                ->icon('heroicon-o-banknotes')
+                ->description('Loan details & charges')
+                ->schema([$sections['loan_details_section']]),
+
+            Step::make('Collateral Information')
+                ->icon('heroicon-o-home')
+                ->description('Real estate / chattel info')
+                ->schema([$sections['collateral_section']]),
+
+            Step::make('Scan / Upload')
+                ->icon('heroicon-o-document-arrow-up')
+                ->description('Upload required documents')
+                ->schema([$sections['document_section']]),
         ];
     }
 
@@ -936,35 +1413,31 @@ class LoanApplicationResource extends Resource
 
         return $schema
             ->components([
-                // CREATE OPERATION: Step-by-step 4-Step Wizard
-                Wizard::make([
-                    Step::make('Members Info')
-                        ->icon('heroicon-o-user')
-                        ->schema([$sections['member_section']]),
-
-                    Step::make('Loan Application')
-                        ->icon('heroicon-o-banknotes')
-                        ->schema([$sections['loan_details_section']]),
-
-                    Step::make('Collateral Information')
-                        ->icon('heroicon-o-home')
-                        ->schema([$sections['collateral_section']]),
-
-                    Step::make('Scan / Upload')
-                        ->icon('heroicon-o-document-arrow-up')
-                        ->schema([$sections['document_section']]),
-                ])
-                ->visible(fn (string $operation) => $operation === 'create')
-                ->columnSpanFull(),
-
-                // EDIT / VIEW OPERATION: Merged Member & Loan Application Tab + Collateral Info + Scan/Upload Tabs
                 Tabs::make('Loan Application Details')
                     ->tabs([
                         Tab::make('Member & Loan Application')
                             ->icon('heroicon-o-user')
                             ->schema([
-                                $sections['member_section'],
-                                $sections['loan_details_section'],
+                                Grid::make(['default' => 1, 'xl' => 12])
+                                    ->schema([
+                                        // LEFT COLUMN (7 of 12 columns): Borrower Profile, Loan Financials & Terms, Collateral Snapshot
+                                        Grid::make(1)
+                                            ->columnSpan(['default' => 12, 'xl' => 7])
+                                            ->schema([
+                                                $sections['member_section'],
+                                                $sections['financials_section'],
+                                                $sections['collateral_summary_section'],
+                                            ]),
+
+                                        // RIGHT COLUMN (5 of 12 columns): Workflow & Status, Evaluator Remarks, Comments
+                                        Grid::make(1)
+                                            ->columnSpan(['default' => 12, 'xl' => 5])
+                                            ->schema([
+                                                $sections['workflow_status_section'],
+                                                $sections['evaluator_notes_section'],
+                                                $sections['comments_section'],
+                                            ]),
+                                    ]),
                             ]),
 
                         Tab::make('Collateral Information')
@@ -979,7 +1452,6 @@ class LoanApplicationResource extends Resource
                             ->icon('heroicon-o-document-arrow-up')
                             ->schema([$sections['document_section']]),
                     ])
-                    ->visible(fn (string $operation) => $operation !== 'create')
                     ->columnSpanFull(),
             ]);
     }
@@ -1159,80 +1631,156 @@ class LoanApplicationResource extends Resource
             ->label('Download')
             ->icon('heroicon-o-arrow-down-tray')
             ->color('success')
-            ->action(function (LoanApplication $record) {
+            ->requiresConfirmation()
+            ->modalHeading('📥 Download Encrypted Documents Archive')
+            ->modalIcon('heroicon-o-lock-closed')
+            ->modalIconColor('success')
+            ->modalDescription(function (LoanApplication $record) {
                 $memberNo = $record->member?->member_no ?? 'MEMBER-GENERAL';
+                $borrowerName = $record->member?->full_name ?? 'Borrower';
                 $appNo = $record->application_no ?? 'LN-GENERAL';
-                $password = $memberNo;
+                $cleanMemberNo = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) $memberNo);
+                $cleanName = str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], '', (string) $borrowerName);
+                $cleanName = preg_replace('/,{2,}/', ',', trim($cleanName));
+                $expectedFileName = "{$cleanMemberNo}_{$cleanName}.zip";
 
-                $safeMemberNo = str_replace(['/', '\\'], '-', $memberNo);
-                $safeAppNo = str_replace(['/', '\\'], '-', $appNo);
-
-                $basePath = storage_path("app/private/{$safeMemberNo}/{$safeAppNo}");
-
-                if (!file_exists($basePath)) {
-                    \Filament\Notifications\Notification::make()
-                        ->title('No Files Found')
-                        ->body("No document files found for application {$appNo}.")
-                        ->warning()
-                        ->send();
-                    return;
-                }
-
-                $tempZipPath = storage_path("app/private/temp_{$safeAppNo}_" . time() . ".zip");
-                $zip = new ZipArchive();
-
-                if ($zip->open($tempZipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-                    \Filament\Notifications\Notification::make()
-                        ->title('Archive Error')
-                        ->body('Unable to generate zip archive file.')
-                        ->danger()
-                        ->send();
-                    return;
-                }
-
-                $zip->setPassword($password);
-
-                $files = new \RecursiveIteratorIterator(
-                    new \RecursiveDirectoryIterator($basePath, \RecursiveDirectoryIterator::SKIP_DOTS),
-                    \RecursiveIteratorIterator::LEAVES_ONLY
-                );
-
-                $folderName = $record->member?->full_name
-                    ? str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], '_', $record->member->full_name)
-                    : $safeAppNo;
-
-                $fileCount = 0;
-                foreach ($files as $file) {
-                    if (!$file->isDir()) {
-                        $filePath = $file->getRealPath();
-                        $relativePath = substr($filePath, strlen($basePath) + 1);
-                        $zipEntryName = "{$folderName}/" . str_replace('\\', '/', $relativePath);
-
-                        $zip->addFile($filePath, $zipEntryName);
-                        if (defined('ZipArchive::EM_AES_256')) {
-                            $zip->setEncryptionName($zipEntryName, ZipArchive::EM_AES_256);
+                return new \Illuminate\Support\HtmlString("
+                    <style>
+                        .pmis-modal-card {
+                            background: #ffffff;
+                            border: 1px solid #e2e8f0;
+                            color: #1e293b;
+                            border-radius: 10px;
+                            padding: 16px;
+                            font-size: 13px;
+                            text-align: left;
                         }
-                        $fileCount++;
-                    }
-                }
+                        .dark .pmis-modal-card {
+                            background: #18181b;
+                            border: 1px solid #3f3f46;
+                            color: #f4f4f5;
+                        }
+                        .pmis-row {
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            gap: 12px;
+                            padding: 7px 0;
+                            border-bottom: 1px solid #f1f5f9;
+                        }
+                        .dark .pmis-row {
+                            border-bottom-color: #27272a;
+                        }
+                        .pmis-label {
+                            color: #64748b;
+                            font-size: 12px;
+                            font-weight: 600;
+                        }
+                        .dark .pmis-label {
+                            color: #a1a1aa;
+                        }
+                        .pmis-val {
+                            color: #0f172a;
+                            font-weight: 700;
+                            font-size: 12.5px;
+                        }
+                        .dark .pmis-val {
+                            color: #ffffff;
+                        }
+                        .pmis-file-badge {
+                            background: #e0f2fe;
+                            color: #0369a1;
+                            padding: 3px 8px;
+                            border-radius: 6px;
+                            font-family: monospace;
+                            font-size: 12px;
+                            font-weight: 700;
+                        }
+                        .dark .pmis-file-badge {
+                            background: #082f49;
+                            color: #38bdf8;
+                            border: 1px solid #0369a1;
+                        }
+                        .pmis-pwd-box {
+                            margin-top: 12px;
+                            padding: 12px 14px;
+                            background: #ecfdf5;
+                            border: 1px solid #a7f3d0;
+                            border-radius: 8px;
+                        }
+                        .dark .pmis-pwd-box {
+                            background: #022c22;
+                            border: 1px solid #059669;
+                        }
+                        .pmis-pwd-heading {
+                            font-size: 11px;
+                            font-weight: 700;
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                            color: #047857;
+                        }
+                        .dark .pmis-pwd-heading {
+                            color: #34d399;
+                        }
+                        .pmis-pwd-code {
+                            font-size: 18px;
+                            font-weight: 800;
+                            color: #065f46;
+                            font-family: monospace;
+                            letter-spacing: 0.5px;
+                            margin-top: 4px;
+                            user-select: all;
+                            cursor: pointer;
+                        }
+                        .dark .pmis-pwd-code {
+                            color: #6ee7b7;
+                        }
+                        .pmis-hint {
+                            margin-top: 12px;
+                            font-size: 11.5px;
+                            line-height: 1.5;
+                            color: #64748b;
+                        }
+                        .dark .pmis-hint {
+                            color: #a1a1aa;
+                        }
+                    </style>
+                    <div class='pmis-modal-card'>
+                        <div class='pmis-row' style='padding-top: 0;'>
+                            <span class='pmis-label'>📄 File Name:</span>
+                            <span class='pmis-file-badge'>" . e($expectedFileName) . "</span>
+                        </div>
+                        <div class='pmis-row'>
+                            <span class='pmis-label'>👤 Borrower:</span>
+                            <span class='pmis-val'>" . e($borrowerName) . "</span>
+                        </div>
+                        <div class='pmis-row' style='border-bottom: none;'>
+                            <span class='pmis-label'>📋 Loan App:</span>
+                            <span class='pmis-val'>" . e($appNo) . "</span>
+                        </div>
+                        <div class='pmis-pwd-box'>
+                            <div class='pmis-pwd-heading'>🔑 Password to Extract (Member ID):</div>
+                            <div class='pmis-pwd-code' title='Click to highlight and copy'>" . e($memberNo) . "</div>
+                        </div>
+                        <div class='pmis-hint'>
+                            Use the <strong style='color: inherit;'>Member ID</strong> above as the password when opening or extracting the ZIP file using 7-Zip, WinRAR, or Windows Extractor.
+                        </div>
+                    </div>
+                ");
+            })
+            ->modalSubmitActionLabel('Download Archive')
+            ->modalCancelActionLabel('Cancel')
+            ->action(function (LoanApplication $record, $livewire) {
+                $downloadUrl = route('loans.download-archive', ['record' => $record->id]);
+                $password = $record->member?->member_no ?? 'MEMBER-GENERAL';
 
-                $zip->close();
+                \Filament\Notifications\Notification::make()
+                    ->title('📦 Archive Downloading')
+                    ->body("Password: {$password}")
+                    ->success()
+                    ->send();
 
-                if ($fileCount === 0) {
-                    if (file_exists($tempZipPath)) {
-                        unlink($tempZipPath);
-                    }
-                    \Filament\Notifications\Notification::make()
-                        ->title('No Files to Download')
-                        ->body("No files are currently stored in application {$appNo}.")
-                        ->warning()
-                        ->send();
-                    return;
-                }
-
-                $downloadFileName = $record->member?->full_name ? str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], '_', $record->member->full_name) : $safeAppNo;
-
-                return response()->download($tempZipPath, "{$downloadFileName}.zip")->deleteFileAfterSend(true);
+                $livewire->js("window.location.href = '{$downloadUrl}';");
             });
     }
 
@@ -1251,6 +1799,597 @@ class LoanApplicationResource extends Resource
             ->modalContent(fn (LoanApplication $record): \Illuminate\Contracts\View\View => view('filament.modals.document-slideover-viewer', [
                 'record' => $record,
             ]));
+    }
+
+    public static function getQuickUploadTableAction(): Action
+    {
+        return Action::make('quickUploadDocument')
+            ->label('Quick Upload Document')
+            ->icon('heroicon-o-arrow-up-tray')
+            ->color('warning')
+            ->slideOver()
+            ->modalWidth('2xl')
+            ->modalHeading(fn (LoanApplication $record): string => "⚡ Quick Document Upload — {$record->application_no}")
+            ->modalDescription(fn (LoanApplication $record): string => "Directly upload an agency receipt (BIR, LTO, PPSR) or updated document for " . ($record->member?->full_name ?? 'Borrower') . " without re-uploading other files.")
+            ->modalSubmitActionLabel('Upload & Attach Document')
+            ->fillForm(fn (LoanApplication $record): array => [
+                'document_type'              => 'BIR',
+                'bir_reference_no'           => $record->bir_reference_no,
+                'bir_amount_paid'            => $record->bir_amount_paid,
+                'notary_doc_no'              => $record->notary_doc_no,
+                'notary_page_no'             => $record->notary_page_no,
+                'notary_book_no'             => $record->notary_book_no,
+                'notary_series_no'           => $record->notary_series_no ?? (string) now()->year,
+                'ppsr_notice_no'             => $record->ppsr_notice_no,
+                'ppsr_payment_date'          => $record->ppsr_payment_date,
+                'ppsr_initial_notice_date'   => $record->ppsr_initial_notice_date,
+                'ppsr_ctc_notice_date'       => $record->ppsr_ctc_notice_date,
+                'rod_entry_no'               => $record->rod_entry_no,
+                'rod_payment_date'           => $record->rod_payment_date,
+                'rod_amount_paid'            => $record->rod_amount_paid,
+                'lto_or_no'                  => $record->lto_or_no,
+                'lto_payment_date'           => $record->lto_payment_date,
+                'lto_amount_paid'            => $record->lto_amount_paid,
+                'cancellation_mode'          => $record->cancellation_mode ?? 'member',
+                'cancellation_entry_no'      => $record->cancellation_entry_no,
+                'cancellation_or_no'         => $record->cancellation_or_no,
+                'cancellation_date'          => $record->cancellation_date,
+                'title_released_date'        => $record->title_released_date,
+                'title_released_to'          => $record->title_released_to,
+                'title_release_remarks'      => $record->title_release_remarks,
+            ])
+            ->form([
+                Select::make('document_type')
+                    ->label('Document Type / Agency')
+                    ->options([
+                        'BIR'          => '🏛️ BIR — EFPS / DST Receipt',
+                        'CONTRACT'     => '📄 Notarized Contract (Chattel Mortgage / Real Estate Mortgage)',
+                        'PN'           => '📝 Notarized Promissory Note / Sworn Undertaking',
+                        'ROD'          => '🏢 ROD — Registry of Deeds Entry / Receipt',
+                        'PPSR'         => '🛡️ PPSR — Security Notice / Registration Receipt',
+                        'LTO'          => '🚗 LTO — Official Receipt (OR) / Certificate of Registration (CR)',
+                        'CANCELLATION' => '🔓 Cancellation / Release of Mortgage / Return Receipt',
+                        'KYC'          => '👤 Borrower KYC / Updated Valid ID',
+                        'COLLATERAL'   => '🚘 Collateral / Stencil / Unit Photo',
+                        'OTHER'        => '📎 Other Document / Memo',
+                    ])
+                    ->default('BIR')
+                    ->required()
+                    ->live(),
+
+                // ── BIR Fields ──
+                Grid::make(['default' => 1, 'md' => 2])
+                    ->visible(fn ($get) => $get('document_type') === 'BIR')
+                    ->schema([
+                        TextInput::make('bir_reference_no')
+                            ->label('eFPS Reference Number')
+                            ->placeholder('e.g. 652600074997564'),
+                        TextInput::make('bir_amount_paid')
+                            ->label('DST Amount Paid (₱)')
+                            ->prefix('₱')
+                            ->placeholder('0.00')
+                            ->numeric(),
+                    ]),
+
+                // ── Notary Fields (Contract / Promissory Note) ──
+                Grid::make(['default' => 2, 'md' => 4])
+                    ->visible(fn ($get) => in_array($get('document_type'), ['CONTRACT', 'PN']))
+                    ->schema([
+                        TextInput::make('notary_doc_no')
+                            ->label('Doc. No.')
+                            ->placeholder('e.g. 142'),
+                        TextInput::make('notary_page_no')
+                            ->label('Page No.')
+                            ->placeholder('e.g. 29'),
+                        TextInput::make('notary_book_no')
+                            ->label('Book No.')
+                            ->placeholder('e.g. XII or 15'),
+                        TextInput::make('notary_series_no')
+                            ->label('Series of')
+                            ->placeholder('e.g. ' . now()->year),
+                    ]),
+
+                // ── PPSR Fields ──
+                Grid::make(['default' => 1, 'md' => 2])
+                    ->visible(fn ($get) => $get('document_type') === 'PPSR')
+                    ->schema([
+                        TextInput::make('ppsr_notice_no')
+                            ->label('Notice Registration #:')
+                            ->placeholder('e.g. PPSR-260724001343'),
+                        DatePicker::make('ppsr_payment_date')
+                            ->label('Date of Payment / Registration:'),
+                        DatePicker::make('ppsr_initial_notice_date')
+                            ->label('Initial Notice Registration Date'),
+                        DatePicker::make('ppsr_ctc_notice_date')
+                            ->label('Certified True Copy of Notice Registration Date'),
+                    ]),
+
+                // ── ROD Fields ──
+                Grid::make(['default' => 1, 'md' => 3])
+                    ->visible(fn ($get) => $get('document_type') === 'ROD')
+                    ->schema([
+                        TextInput::make('rod_entry_no')
+                            ->label('Ref No. / EPEB Entry #:')
+                            ->placeholder('e.g. EPEB496/2026001432'),
+                        DatePicker::make('rod_payment_date')
+                            ->label('Date of Payment / Registration:'),
+                        TextInput::make('rod_amount_paid')
+                            ->label('ROD Amount Paid (₱):')
+                            ->prefix('₱')
+                            ->placeholder('0.00')
+                            ->numeric(),
+                    ]),
+
+                // ── LTO Fields ──
+                Grid::make(['default' => 1, 'md' => 3])
+                    ->visible(fn ($get) => $get('document_type') === 'LTO')
+                    ->schema([
+                        TextInput::make('lto_or_no')
+                            ->label('Official Receipt No. (OR No.)')
+                            ->placeholder('e.g. OR-2026-009876'),
+                        DatePicker::make('lto_payment_date')
+                            ->label('Date Paid / Registered'),
+                        TextInput::make('lto_amount_paid')
+                            ->label('Amount Paid (₱)')
+                            ->prefix('₱')
+                            ->placeholder('0.00')
+                            ->numeric(),
+                    ]),
+
+                // ── Cancellation / Release Fields ──
+                Grid::make(1)
+                    ->visible(fn ($get) => $get('document_type') === 'CANCELLATION')
+                    ->schema([
+                        Radio::make('cancellation_mode')
+                            ->label('Processing Mode')
+                            ->options([
+                                'member' => '👤 Member-Handled (Si Member ang maglalakad sa ROD/LTO)',
+                                'coop'   => '🏢 Office-Assisted (Gisalig sa Opisina / Tayo ang maglalakad)',
+                            ])
+                            ->default('member')
+                            ->live()
+                            ->inline(),
+
+                        // If Member-Handled
+                        Grid::make(['default' => 1, 'md' => 3])
+                            ->visible(fn ($get) => ($get('cancellation_mode') ?? 'member') === 'member')
+                            ->schema([
+                                DatePicker::make('title_released_date')
+                                    ->label('Date Documents Handed Over'),
+                                TextInput::make('title_released_to')
+                                    ->label('Receiver Full Name')
+                                    ->placeholder('e.g. Juan Dela Cruz'),
+                                TextInput::make('title_release_remarks')
+                                    ->label('Receipt / Remarks')
+                                    ->placeholder('e.g. AR #88219 (Docs issued)'),
+                            ]),
+
+                        // If Office-Assisted
+                        Grid::make(['default' => 1, 'md' => 3])
+                            ->visible(fn ($get) => $get('cancellation_mode') === 'coop')
+                            ->schema([
+                                TextInput::make('cancellation_entry_no')
+                                    ->label('Cancellation Entry / ROD Entry #')
+                                    ->placeholder('e.g. 2026-CAN-00045'),
+                                TextInput::make('cancellation_or_no')
+                                    ->label('ROD Cancellation OR #')
+                                    ->placeholder('e.g. OR-ROD-88912'),
+                                DatePicker::make('cancellation_date')
+                                    ->label('Date Cancellation Filed'),
+                                DatePicker::make('title_released_date')
+                                    ->label('Date Title Returned to Member'),
+                                TextInput::make('title_released_to')
+                                    ->label('Released To (Receiver Name)')
+                                    ->placeholder('Borrower name or Authorized Rep'),
+                                TextInput::make('title_release_remarks')
+                                    ->label('Receipt / Remarks')
+                                    ->placeholder('e.g. AR #88219'),
+                            ]),
+                    ]),
+
+                // ── General Reference for KYC / Collateral / Other ──
+                TextInput::make('reference_no')
+                    ->label('Reference No. / Note (Optional)')
+                    ->placeholder('e.g. Valid ID No., Remarks, etc.')
+                    ->visible(fn ($get) => in_array($get('document_type'), ['KYC', 'COLLATERAL', 'OTHER'])),
+
+                FileUpload::make('attachment')
+                    ->label('Select File(s) (.jpg, .jpeg, .png, .webp, .pdf)')
+                    ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'image/webp'])
+                    ->imageResizeMode('contain')
+                    ->imageResizeTargetWidth('1200')
+                    ->imageResizeTargetHeight('1200')
+                    ->imageResizeUpscale(false)
+                    ->disk('public')
+                    ->directory('quick-document-uploads')
+                    ->preserveFilenames(false)
+                    ->multiple()
+                    ->reorderable()
+                    ->panelLayout('grid')
+                    ->imagePreviewHeight('150px')
+                    ->required()
+                    ->helperText('You can select or drag multiple files (e.g. Front & Back ID, multiple contract pages, or multiple photos).'),
+            ])
+            ->action(function (LoanApplication $record, array $data, $livewire): void {
+                $docType = $data['document_type'];
+                $uploadedFiles = (array) ($data['attachment'] ?? []);
+
+                if (empty($uploadedFiles)) {
+                    Notification::make()
+                        ->title('Upload Error')
+                        ->body('No files were uploaded.')
+                        ->danger()
+                        ->send();
+                    return;
+                }
+
+                $refNo = '';
+                $updateData = [];
+
+                if ($docType === 'BIR') {
+                    if (isset($data['bir_reference_no']) && filled($data['bir_reference_no'])) {
+                        $updateData['bir_reference_no'] = trim($data['bir_reference_no']);
+                        $refNo = trim($data['bir_reference_no']);
+                    }
+                    if (isset($data['bir_amount_paid']) && filled($data['bir_amount_paid'])) {
+                        $updateData['bir_amount_paid'] = $data['bir_amount_paid'];
+                    }
+                } elseif (in_array($docType, ['CONTRACT', 'PN'])) {
+                    if (isset($data['notary_doc_no']) && filled($data['notary_doc_no'])) {
+                        $updateData['notary_doc_no'] = trim($data['notary_doc_no']);
+                    }
+                    if (isset($data['notary_page_no']) && filled($data['notary_page_no'])) {
+                        $updateData['notary_page_no'] = trim($data['notary_page_no']);
+                    }
+                    if (isset($data['notary_book_no']) && filled($data['notary_book_no'])) {
+                        $updateData['notary_book_no'] = trim($data['notary_book_no']);
+                    }
+                    if (isset($data['notary_series_no']) && filled($data['notary_series_no'])) {
+                        $updateData['notary_series_no'] = trim($data['notary_series_no']);
+                    }
+                    $notaryParts = array_filter([
+                        filled($data['notary_doc_no'] ?? null) ? 'Doc #' . $data['notary_doc_no'] : null,
+                        filled($data['notary_book_no'] ?? null) ? 'Bk #' . $data['notary_book_no'] : null,
+                    ]);
+                    $refNo = implode(', ', $notaryParts);
+                } elseif ($docType === 'PPSR') {
+                    if (isset($data['ppsr_notice_no']) && filled($data['ppsr_notice_no'])) {
+                        $updateData['ppsr_notice_no'] = trim($data['ppsr_notice_no']);
+                        $refNo = trim($data['ppsr_notice_no']);
+                    }
+                    if (isset($data['ppsr_payment_date']) && filled($data['ppsr_payment_date'])) {
+                        $updateData['ppsr_payment_date'] = $data['ppsr_payment_date'];
+                    }
+                    if (isset($data['ppsr_initial_notice_date']) && filled($data['ppsr_initial_notice_date'])) {
+                        $updateData['ppsr_initial_notice_date'] = $data['ppsr_initial_notice_date'];
+                    }
+                    if (isset($data['ppsr_ctc_notice_date']) && filled($data['ppsr_ctc_notice_date'])) {
+                        $updateData['ppsr_ctc_notice_date'] = $data['ppsr_ctc_notice_date'];
+                    }
+                } elseif ($docType === 'ROD') {
+                    if (isset($data['rod_entry_no']) && filled($data['rod_entry_no'])) {
+                        $updateData['rod_entry_no'] = trim($data['rod_entry_no']);
+                        $refNo = trim($data['rod_entry_no']);
+                    }
+                    if (isset($data['rod_payment_date']) && filled($data['rod_payment_date'])) {
+                        $updateData['rod_payment_date'] = $data['rod_payment_date'];
+                    }
+                    if (isset($data['rod_amount_paid']) && filled($data['rod_amount_paid'])) {
+                        $updateData['rod_amount_paid'] = $data['rod_amount_paid'];
+                    }
+                } elseif ($docType === 'LTO') {
+                    if (isset($data['lto_or_no']) && filled($data['lto_or_no'])) {
+                        $updateData['lto_or_no'] = trim($data['lto_or_no']);
+                        $refNo = trim($data['lto_or_no']);
+                    }
+                    if (isset($data['lto_payment_date']) && filled($data['lto_payment_date'])) {
+                        $updateData['lto_payment_date'] = $data['lto_payment_date'];
+                    }
+                    if (isset($data['lto_amount_paid']) && filled($data['lto_amount_paid'])) {
+                        $updateData['lto_amount_paid'] = $data['lto_amount_paid'];
+                    }
+                } elseif ($docType === 'CANCELLATION') {
+                    $mode = $data['cancellation_mode'] ?? 'member';
+                    $updateData['cancellation_mode'] = $mode;
+
+                    if (isset($data['title_released_date']) && filled($data['title_released_date'])) {
+                        $updateData['title_released_date'] = $data['title_released_date'];
+                    }
+                    if (isset($data['title_released_to']) && filled($data['title_released_to'])) {
+                        $updateData['title_released_to'] = trim($data['title_released_to']);
+                    }
+                    if (isset($data['title_release_remarks']) && filled($data['title_release_remarks'])) {
+                        $updateData['title_release_remarks'] = trim($data['title_release_remarks']);
+                    }
+
+                    if ($mode === 'member') {
+                        $updateData['mortgage_release_status'] = 'released_self_cancellation';
+                        $updateData['is_title_returned'] = true;
+                        $updateData['is_cancellation_deed_returned'] = true;
+                        $refNo = !empty($data['title_release_remarks']) ? trim($data['title_release_remarks']) : 'Self-Cancellation';
+                    } else {
+                        if (isset($data['cancellation_entry_no']) && filled($data['cancellation_entry_no'])) {
+                            $updateData['cancellation_entry_no'] = trim($data['cancellation_entry_no']);
+                            $refNo = trim($data['cancellation_entry_no']);
+                        }
+                        if (isset($data['cancellation_or_no']) && filled($data['cancellation_or_no'])) {
+                            $updateData['cancellation_or_no'] = trim($data['cancellation_or_no']);
+                        }
+                        if (isset($data['cancellation_date']) && filled($data['cancellation_date'])) {
+                            $updateData['cancellation_date'] = $data['cancellation_date'];
+                        }
+                        $updateData['mortgage_release_status'] = 'cancelled_released';
+                        if (empty($refNo)) {
+                            $refNo = !empty($data['cancellation_or_no']) ? trim($data['cancellation_or_no']) : 'Office-Cancellation';
+                        }
+                    }
+                } else {
+                    $refNo = !empty($data['reference_no']) ? trim($data['reference_no']) : '';
+                }
+
+                // Auto-sync entered agency & tracking fields directly to loan record
+                if (!empty($updateData)) {
+                    $record->update($updateData);
+                }
+
+                $uploadedCount = 0;
+                $slugRef = !empty($refNo) ? '_' . \Illuminate\Support\Str::slug($refNo) : '';
+                $timestamp = date('Ymd_His');
+                $totalFiles = count($uploadedFiles);
+
+                foreach ($uploadedFiles as $index => $uploadedRelativePath) {
+                    $fullDiskPath = \Illuminate\Support\Facades\Storage::disk('public')->path($uploadedRelativePath);
+
+                    if (!file_exists($fullDiskPath)) {
+                        continue;
+                    }
+
+                    $ext = pathinfo($fullDiskPath, PATHINFO_EXTENSION);
+                    $suffix = $totalFiles > 1 ? "_" . ($index + 1) : '';
+                    $cleanFileName = "{$docType}{$slugRef}_{$timestamp}{$suffix}.{$ext}";
+
+                    $displayName = $totalFiles > 1
+                        ? "{$docType} Document " . (!empty($refNo) ? "({$refNo})" : date('M d, Y')) . " (Part " . ($index + 1) . ")"
+                        : "{$docType} Document " . (!empty($refNo) ? "({$refNo})" : date('M d, Y'));
+
+                    $mediaAdder = $record->addMedia($fullDiskPath);
+                    $mediaAdder
+                        ->usingFileName($cleanFileName)
+                        ->usingName($displayName)
+                        ->withCustomProperties([
+                            'document_type' => $docType,
+                            'reference_no'  => $refNo,
+                            'uploaded_by'   => auth()->user()?->name ?? 'User',
+                        ])
+                        ->toMediaCollection('loan_application_documents', 'public');
+
+                    $uploadedCount++;
+                }
+
+                $fileCountText = $uploadedCount > 1 ? "{$uploadedCount} documents" : "Document";
+
+                Notification::make()
+                    ->title('⚡ Upload Successful!')
+                    ->body("{$fileCountText} categorized as {$docType} attached to Application {$record->application_no} and tracking details updated.")
+                    ->success()
+                    ->send();
+
+                if (method_exists($livewire, 'dispatch')) {
+                    $livewire->dispatch('$refresh');
+                }
+            });
+    }
+
+    public static function getExportToExcelBulkAction(): BulkAction
+    {
+        return BulkAction::make('export_to_excel')
+            ->label('Export to Excel')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('success')
+            ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                $spreadsheet = new Spreadsheet();
+                $sheet = $spreadsheet->getActiveSheet();
+                $sheet->setTitle('Loan Applications');
+
+                $headers = [
+                    'Date Filed',
+                    'Application ID',
+                    'Borrower Name',
+                    'Member No.',
+                    'CID',
+                    'OIC Branch',
+                    'Loan Amount',
+                    'Collateral Type',
+                    'Approval Status',
+                    'Stage / Status',
+                    'Aging in Stage',
+                    'Deficiency / Sub-Status',
+                    'Application Notes / HO Assessment',
+                    'Loan Account No.',
+                    'Date Granted',
+                    'Maturity Date',
+                ];
+
+                $sheet->fromArray([$headers], null, 'A1');
+
+                // Header styling: Emerald green, bold white text, centered
+                $sheet->getStyle('A1:P1')->applyFromArray([
+                    'font' => [
+                        'bold' => true,
+                        'color' => ['rgb' => 'FFFFFF'],
+                        'size' => 11,
+                    ],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => '15803D'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical'   => Alignment::VERTICAL_CENTER,
+                    ],
+                ]);
+                $sheet->getRowDimension(1)->setRowHeight(26);
+
+                $row = 2;
+                foreach ($records as $record) {
+                    $record->loadMissing(['member', 'branchOffice']);
+
+                    $collateral = match (true) {
+                        str_contains(strtolower((string) $record->collateral_type), 'chattel') || str_contains(strtolower((string) $record->collateral_type), 'cm') => 'Chattel Mortgage (CM)',
+                        str_contains(strtolower((string) $record->collateral_type), 'real_estate') || str_contains(strtolower((string) $record->collateral_type), 'rem') => 'Real Estate Mortgage (REM)',
+                        default => ucwords(str_replace('_', ' ', (string) $record->collateral_type)),
+                    };
+
+                    $daysInStage = $record->status_changed_at
+                        ? (int) now()->diffInDays($record->status_changed_at)
+                        : (int) now()->diffInDays($record->created_at);
+                    $agingText = $daysInStage === 0 ? 'Today' : "{$daysInStage} day(s)";
+
+                    $deficiencyText = match ($record->sub_status) {
+                        'internal_deficiency' => 'INTERNAL DEFICIENCY',
+                        'external_deficiency' => 'EXTERNAL DEFICIENCY',
+                        default => 'CLEAN / ON PROCESS',
+                    };
+
+                    $dataRow = [
+                        $record->created_at ? $record->created_at->format('M d, Y') : '—',
+                        $record->application_no ?? '—',
+                        $record->member?->full_name ?? '—',
+                        $record->member?->member_no ?? '—',
+                        $record->member?->cid ?? '—',
+                        $record->branchOffice?->name ?? '—',
+                        (float) ($record->requested_amount ?? 0),
+                        $collateral,
+                        $record->approval_status ?? 'Pending',
+                        $record->status ?? 'Initial Assessment',
+                        $agingText,
+                        $deficiencyText,
+                        $record->deficiency_notes ?: ($record->notes ?: '—'),
+                        $record->loan_account_no ?? '—',
+                        $record->date_granted ? $record->date_granted->format('M d, Y') : '—',
+                        $record->maturity_date ? $record->maturity_date->format('M d, Y') : '—',
+                    ];
+
+                    $sheet->fromArray([$dataRow], null, "A{$row}", true);
+
+                    // Currency format for Loan Amount (Col G)
+                    $sheet->getStyle("G{$row}")
+                        ->getNumberFormat()
+                        ->setFormatCode('₱#,##0.00;([₱#,##0.00]);"-"');
+
+                    // Center-align dates and IDs
+                    $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("D{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("E{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("H{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("I{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("J{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("L{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("O{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle("P{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    // Alternating row background for clean readability
+                    if ($row % 2 === 1) {
+                        $sheet->getStyle("A{$row}:P{$row}")
+                            ->getFill()
+                            ->setFillType(Fill::FILL_SOLID)
+                            ->getStartColor()
+                            ->setRGB('F8FAFC');
+                    }
+
+                    $sheet->getRowDimension($row)->setRowHeight(20);
+                    $row++;
+                }
+
+                $lastRow = $row - 1;
+                if ($lastRow >= 2) {
+                    $sheet->getStyle("A1:P{$lastRow}")
+                        ->getBorders()
+                        ->getAllBorders()
+                        ->setBorderStyle(Border::BORDER_THIN)
+                        ->getColor()
+                        ->setRGB('E2E8F0');
+                }
+
+                foreach (range('A', 'P') as $col) {
+                    $sheet->getColumnDimension($col)->setAutoSize(true);
+                }
+
+                $fileName = 'Loan_Applications_Export_' . now()->format('Y-m-d_His') . '.xlsx';
+
+                return response()->streamDownload(function () use ($spreadsheet) {
+                    $writer = new Xlsx($spreadsheet);
+                    $writer->save('php://output');
+                }, $fileName, [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                ]);
+            })
+            ->deselectRecordsAfterCompletion();
+    }
+
+    public static function getCreateTransmittalBulkAction(): BulkAction
+    {
+        return BulkAction::make('generate_transmittal')
+            ->label('Generate Mortgage Transmittal')
+            ->icon('heroicon-o-printer')
+            ->color('success')
+            ->modalHeading('Official Mortgage Transmittal Generator')
+            ->modalDescription('Awtomatikong kukuwentahin ang statutory fees (ROD/LTO, BIR DST, HO Fee, Misc, SPA) at bubuuin ang opisyal na Oro Integrated Cooperative transmittal.')
+            ->modalSubmitActionLabel('Print Transmittal Slip')
+            ->form([
+                DatePicker::make('transmittal_date')
+                    ->label('Transmittal Date')
+                    ->default(now())
+                    ->required(),
+                TextInput::make('checked_by')
+                    ->label('Checked By (Bookkeeper)')
+                    ->placeholder('e.g. Maria Santos (Bookkeeper)')
+                    ->default('Bookkeeper'),
+                TextInput::make('approved_by')
+                    ->label('Approved By (Branch Manager)')
+                    ->placeholder('e.g. Juan dela Cruz (Branch Manager)')
+                    ->default('Branch Manager'),
+                TextInput::make('courier_details')
+                    ->label('Courier / Delivery Handling')
+                    ->placeholder('e.g. Liaison Officer / Hand Carried / LBC')
+                    ->default('Liaison Officer / Hand Carried'),
+            ])
+            ->extraModalFooterActions([
+                Action::make('download_excel')
+                    ->label('Download Official Excel (.xlsx)')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('success')
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
+                        if ($records->isEmpty()) {
+                            return;
+                        }
+                        $ids = $records->pluck('id')->implode(',');
+                        $url = route('transmittals.generate-excel', [
+                            'ids'         => $ids,
+                            'date'        => $data['transmittal_date'] ?? now()->format('Y-m-d'),
+                            'checked_by'  => $data['checked_by'] ?? 'Bookkeeper',
+                            'approved_by' => $data['approved_by'] ?? 'Branch Manager',
+                            'courier'     => $data['courier_details'] ?? 'Liaison Officer / Hand Carried',
+                        ]);
+                        return redirect()->away($url);
+                    }),
+            ])
+            ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data) {
+                if ($records->isEmpty()) {
+                    return;
+                }
+                $ids = $records->pluck('id')->implode(',');
+                $url = route('transmittals.generate-print', [
+                    'ids'         => $ids,
+                    'date'        => $data['transmittal_date'] ?? now()->format('Y-m-d'),
+                    'checked_by'  => $data['checked_by'] ?? 'Bookkeeper',
+                    'approved_by' => $data['approved_by'] ?? 'Branch Manager',
+                    'courier'     => $data['courier_details'] ?? 'Liaison Officer / Hand Carried',
+                ]);
+                return redirect()->away($url);
+            })
+            ->deselectRecordsAfterCompletion();
     }
 
     public static function table(Table $table): Table
@@ -1272,7 +2411,7 @@ class LoanApplicationResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('member.last_name')
                     ->label('Borrower Name')
-                    ->formatStateUsing(fn ($record) => $record->member?->full_name ?? '—')
+                    ->formatStateUsing(fn ($state, $record) => $record?->member?->full_name ?? $state ?? '—')
                     ->description(fn ($record) => $record->branchOffice?->name)
                     ->copyable()
                     ->copyableState(fn ($record) => $record->member?->full_name)
@@ -1281,7 +2420,20 @@ class LoanApplicationResource extends Resource
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('requested_amount')
-                    ->label('Requested Amount')
+                    ->label(function ($livewire = null): string {
+                        $resource = (is_object($livewire) && method_exists($livewire, 'getResource'))
+                            ? $livewire::getResource()
+                            : null;
+
+                        if ($resource === \App\Filament\Resources\ForApprovalResource::class
+                            || $resource === \App\Filament\Resources\DisapprovedLoanResource::class
+                            || request()->routeIs('*.for-approvals.*')
+                            || request()->routeIs('*.disapproved-loans.*')) {
+                            return 'Requested Amount';
+                        }
+
+                        return 'Loan Amount';
+                    })
                     ->money('PHP')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('collateral_type')
@@ -1314,7 +2466,21 @@ class LoanApplicationResource extends Resource
                             $colStatus = !empty($statuses) ? $statuses : 'New';
                         }
 
-                        return new \Illuminate\Support\HtmlString("<span style='font-size: 10px; font-weight: 500; opacity: 0.85; display: block; margin-top: 2px;'>{$countText} • {$colStatus}</span>");
+                        $custodyInfo = '';
+                        if ($record->mortgage_release_status === 'cancelled_released') {
+                            $custodyInfo = " • <span style='color: #10b981; font-weight: 600;'>Title Returned (Cancelled)</span>";
+                        } elseif ($record->mortgage_release_status === 'released_self_cancellation') {
+                            $custodyInfo = " • <span style='color: #0284c7; font-weight: 600;'>Docs Issued (Self-Cancel)</span>";
+                        } elseif ($record->mortgage_release_status === 'for_cancellation') {
+                            $custodyInfo = " • <span style='color: #f59e0b; font-weight: 600;'>For ROD Cancel</span>";
+                        } elseif (filled($record->title_released_date)) {
+                            $custodyInfo = " • <span style='color: #10b981; font-weight: 600;'>Title Returned</span>";
+                        } elseif (filled($record->vault_location)) {
+                            $vaultSafe = e($record->vault_location);
+                            $custodyInfo = " • <span>Vault: {$vaultSafe}</span>";
+                        }
+
+                        return new \Illuminate\Support\HtmlString("<span style='font-size: 10px; font-weight: 500; opacity: 0.85; display: block; margin-top: 2px;'>{$countText} • {$colStatus}{$custodyInfo}</span>");
                     }),
                 Tables\Columns\TextColumn::make('approval_status')
                     ->label('Approval Status')
@@ -1333,8 +2499,13 @@ class LoanApplicationResource extends Resource
                         if (in_array($record->sub_status, ['internal_deficiency', 'external_deficiency'])) {
                             return 'danger';
                         }
-                        $dbStatus = \App\Models\ApplicationStatus::where('name', $state)->first();
-                        return $dbStatus?->color ?? 'info';
+                        static $statusColorMap = null;
+                        if ($statusColorMap === null) {
+                            $statusColorMap = \Illuminate\Support\Facades\Cache::remember('application_status_colors', 300, function () {
+                                return \App\Models\ApplicationStatus::pluck('color', 'name')->toArray();
+                            });
+                        }
+                        return $statusColorMap[$state] ?? 'info';
                     })
                     ->description(function (LoanApplication $record): ?\Illuminate\Support\HtmlString {
                         $html = '';
@@ -1365,11 +2536,31 @@ class LoanApplicationResource extends Resource
                         return new \Illuminate\Support\HtmlString($html);
                     })
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('notes')
+                    ->label('Application Notes / HO Assessment')
+                    ->wrap()
+                    ->limit(65)
+                    ->tooltip(fn (LoanApplication $record): ?string => $record->notes)
+                    ->searchable()
+                    ->placeholder('—')
+                    ->description(function (LoanApplication $record): ?string {
+                        $defNotes = $record->deficiency_notes ?: ($record->notes ?: null);
+                        $shortNotes = $defNotes ? \Illuminate\Support\Str::limit($defNotes, 60) : 'Deficiency noted';
+                        if ($record->sub_status === 'internal_deficiency') {
+                            return '🏢 Internal Deficiency: ' . $shortNotes;
+                        } elseif ($record->sub_status === 'external_deficiency') {
+                            return '🏛️ External Deficiency: ' . $shortNotes;
+                        }
+
+                        return null;
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('loan_account_no')
-                    ->label('Loan Account No.')
+                    ->label('Account No.')
                     ->fontFamily('mono')
                     ->copyable()
-                    ->copyMessage('Loan Account No. copied to clipboard!')
+                    ->copyMessage('Account No. copied to clipboard!')
                     ->copyMessageDuration(1500)
                     ->searchable()
                     ->placeholder('—')
@@ -1414,8 +2605,12 @@ class LoanApplicationResource extends Resource
                 Tables\Filters\SelectFilter::make('collateral_type')
                     ->label('Collateral Type')
                     ->options([
-                        'real_estate_mortgage' => 'Real Estate Mortgage',
-                        'chattel_mortgage' => 'Chattel Mortgage',
+                        'real_estate_mortgage' => 'Real Estate Mortgage (REM)',
+                        'rem_certification'    => 'REM Certification',
+                        'rem_amendment'        => 'REM Amendment',
+                        'chattel_mortgage'     => 'Chattel Mortgage (CM)',
+                        'cm_certification'     => 'CM Certification',
+                        'cm_amendment'         => 'CM Amendment',
                     ]),
                 Tables\Filters\SelectFilter::make('branch_office_id')
                     ->label('OIC Branch Office')
@@ -1481,17 +2676,21 @@ class LoanApplicationResource extends Resource
             ->actions([
                 ActionGroup::make([
                     static::getViewDocumentsTableAction(),
+                    static::getQuickUploadTableAction(),
                     static::getApproveTableAction(),
                     static::getDisapproveTableAction(),
                     static::getDownloadArchiveTableAction(),
                     EditAction::make()
                         ->url(fn (LoanApplication $record): string => LoanApplicationResource::getUrl('edit', ['record' => $record])),
-                    DeleteAction::make(),
+                    DeleteAction::make()
+                        ->visible(fn (LoanApplication $record): bool => auth()->user()?->can('Delete:LoanApplication') && (auth()->user()?->isHeadOfficeUser() || auth()->user()?->hasRole(['super_admin', 'Super Admin']))),
                 ]),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
+                    static::getCreateTransmittalBulkAction(),
+                    static::getExportToExcelBulkAction(),
                 ]),
             ]);
     }

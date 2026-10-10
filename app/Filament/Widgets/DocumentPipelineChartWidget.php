@@ -7,6 +7,11 @@ use Filament\Widgets\ChartWidget;
 
 class DocumentPipelineChartWidget extends ChartWidget
 {
+    public static function canView(): bool
+    {
+        return false;
+    }
+
     protected static bool $isLazy = false;
 
     protected ?string $heading = 'Document Tracking Pipeline Distribution';

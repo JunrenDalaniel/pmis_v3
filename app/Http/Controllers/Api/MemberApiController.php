@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Member;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -17,16 +18,22 @@ class MemberApiController extends Controller
     {
         $query = Member::with('branchOffice:id,name');
 
+        if ($request->filled('branch_office_id')) {
+            $query->where('branch_office_id', $request->get('branch_office_id'));
+        }
+
         if ($request->has('search')) {
             $search = $request->get('search');
             $query->where(function ($q) use ($search) {
                 $q->where('member_no', 'like', "%{$search}%")
+                  ->orWhere('cid', 'like', "%{$search}%")
                   ->orWhere('first_name', 'like', "%{$search}%")
                   ->orWhere('last_name', 'like', "%{$search}%");
             });
         }
 
-        $members = $query->latest()->paginate($request->get('per_page', 15));
+        $perPage = min(max((int) $request->get('per_page', 15), 1), 100);
+        $members = $query->latest()->paginate($perPage);
 
         return response()->json([
             'status' => 'success',
@@ -35,13 +42,15 @@ class MemberApiController extends Controller
     }
 
     /**
-     * Display a specific member by Member No / IPI No or ID.
+     * Display a specific member by Member No or CID.
      */
     public function show(string $identifier): JsonResponse
     {
         $member = Member::with(['branchOffice', 'loanApplications'])
-            ->where('member_no', $identifier)
-            ->orWhere('id', $identifier)
+            ->where(function ($q) use ($identifier) {
+                $q->where('member_no', $identifier)
+                  ->orWhere('cid', $identifier);
+            })
             ->first();
 
         if (! $member) {
@@ -63,7 +72,10 @@ class MemberApiController extends Controller
     public function verify(string $member_no): JsonResponse
     {
         $member = Member::with('branchOffice:id,name')
-            ->where('member_no', $member_no)
+            ->where(function ($q) use ($member_no) {
+                $q->where('member_no', $member_no)
+                  ->orWhere('cid', $member_no);
+            })
             ->first();
 
         if (! $member) {
@@ -81,6 +93,7 @@ class MemberApiController extends Controller
             'member' => [
                 'id' => $member->id,
                 'member_no' => $member->member_no,
+                'cid' => $member->cid,
                 'full_name' => $member->full_name,
                 'email' => $member->email,
                 'phone' => $member->phone,
@@ -95,6 +108,7 @@ class MemberApiController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
+            'cid' => 'nullable|string|max:255',
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
@@ -115,18 +129,27 @@ class MemberApiController extends Controller
             ], 422);
         }
 
-        // Generate sequential API-ready Member No (IPI-YYYY-XXXXX)
         $year = date('Y');
         $nextId = (Member::max('id') ?? 0) + 1;
-        $memberNo = 'API-' . $year . '-' . str_pad((string) $nextId, 5, '0', STR_PAD_LEFT);
+        do {
+            $memberNo = 'API-' . $year . '-' . str_pad((string) $nextId, 5, '0', STR_PAD_LEFT);
+            $nextId++;
+        } while (Member::where('member_no', $memberNo)->exists());
 
-        $member = Member::create(array_merge(
-            $validator->validated(),
-            [
-                'member_no' => $memberNo,
-                'is_active' => true,
-            ]
-        ));
+        try {
+            $member = Member::create(array_merge(
+                $validator->validated(),
+                [
+                    'member_no' => $memberNo,
+                    'is_active' => true,
+                ]
+            ));
+        } catch (QueryException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unable to create member record due to a conflict. Please retry.',
+            ], 409);
+        }
 
         return response()->json([
             'status' => 'success',

@@ -81,4 +81,109 @@ class ChattelCollateral extends Model
     {
         return $this->belongsTo(LoanApplication::class);
     }
+
+    protected static function booted(): void
+    {
+        static::saving(function (ChattelCollateral $collateral) {
+            if (blank($collateral->registration_renewal_date) && filled($collateral->plate_no)) {
+                $computed = static::computeRenewalDateFromPlate($collateral->plate_no);
+                if ($computed) {
+                    $collateral->registration_renewal_date = $computed;
+                }
+            }
+        });
+    }
+
+    /**
+     * Compute LTO renewal month and schedule details based on Philippine LTO plate number rules.
+     *
+     * Rules:
+     * - Last digit: Renewal Month (1=Jan, 2=Feb, ..., 9=Sep, 0=Oct)
+     * - 2nd to last digit: Weekly working days schedule (1-3: 1st week, 4-6: 2nd week, 7-8: 3rd week, 9-0: 4th week)
+     */
+    public static function computeRenewalScheduleFromPlate(?string $plateNo, ?int $referenceYear = null): ?array
+    {
+        if (blank($plateNo)) {
+            return null;
+        }
+
+        $digits = preg_replace('/[^0-9]/', '', (string) $plateNo);
+        if (empty($digits)) {
+            return null;
+        }
+
+        $lastDigit = (int) substr($digits, -1);
+        $month = match ($lastDigit) {
+            1 => 1,
+            2 => 2,
+            3 => 3,
+            4 => 4,
+            5 => 5,
+            6 => 6,
+            7 => 7,
+            8 => 8,
+            9 => 9,
+            0 => 10,
+        };
+
+        $monthName = match ($month) {
+            1 => 'January',
+            2 => 'February',
+            3 => 'March',
+            4 => 'April',
+            5 => 'May',
+            6 => 'June',
+            7 => 'July',
+            8 => 'August',
+            9 => 'September',
+            10 => 'October',
+        };
+
+        $day = 1;
+        $weekDesc = '1st week (1st–7th working days)';
+        if (strlen($digits) >= 2) {
+            $secondLastDigit = (int) substr($digits, -2, 1);
+            match ($secondLastDigit) {
+                1, 2, 3 => [$day = 1, $weekDesc = '1st week (1st–7th working days)'],
+                4, 5, 6 => [$day = 8, $weekDesc = '2nd week (8th–14th working days)'],
+                7, 8    => [$day = 15, $weekDesc = '3rd week (15th–21st working days)'],
+                9, 0    => [$day = 22, $weekDesc = '4th week (22nd to month end)'],
+                default => [$day = 1, $weekDesc = '1st week (1st–7th working days)'],
+            };
+        }
+
+        $currYear = $referenceYear ?: (int) now()->year;
+        $currMonth = (int) now()->month;
+
+        $targetYear = ($month < $currMonth) ? ($currYear + 1) : $currYear;
+
+        return [
+            'month'           => $month,
+            'day'             => $day,
+            'year'            => $targetYear,
+            'formatted_month' => sprintf('%04d-%02d', $targetYear, $month),
+            'formatted_date'  => sprintf('%04d-%02d-%02d', $targetYear, $month, $day),
+            'month_name'      => $monthName,
+            'week_desc'       => $weekDesc,
+            'description'     => "LTO: {$monthName} (Ending {$lastDigit}) • {$weekDesc}",
+        ];
+    }
+
+    public static function computeRenewalMonthFromPlate(?string $plateNo, ?int $referenceYear = null): ?string
+    {
+        $sched = static::computeRenewalScheduleFromPlate($plateNo, $referenceYear);
+        return $sched ? $sched['formatted_month'] : null;
+    }
+
+    public static function computeRenewalDateFromPlate(?string $plateNo, ?int $referenceYear = null): ?string
+    {
+        $sched = static::computeRenewalScheduleFromPlate($plateNo, $referenceYear);
+        return $sched ? $sched['formatted_date'] : null;
+    }
+
+    public static function getLtoScheduleDescription(?string $plateNo): ?string
+    {
+        $sched = static::computeRenewalScheduleFromPlate($plateNo);
+        return $sched ? $sched['description'] : null;
+    }
 }

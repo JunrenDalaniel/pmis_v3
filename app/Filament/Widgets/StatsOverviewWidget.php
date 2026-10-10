@@ -2,12 +2,15 @@
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Concerns\InteractsWithDashboardFilters;
 use App\Models\LoanApplication;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class StatsOverviewWidget extends BaseWidget
 {
+    use InteractsWithDashboardFilters;
+
     protected static bool $isLazy = false;
 
     protected static ?int $sort = 1;
@@ -25,6 +28,24 @@ class StatsOverviewWidget extends BaseWidget
         $baseQuery = LoanApplication::query();
         if (is_array($allowed)) {
             $baseQuery->whereIn('branch_office_id', $allowed);
+        }
+
+        // Apply Global Page Filters
+        [$startDate, $endDate] = $this->getFilterDateRange();
+        $selectedBranch = $this->getFilterBranchId();
+        $selectedCollateral = $this->getFilterCollateralType();
+
+        if ($startDate) {
+            $baseQuery->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $baseQuery->whereDate('created_at', '<=', $endDate);
+        }
+        if ($selectedBranch) {
+            $baseQuery->where('branch_office_id', $selectedBranch);
+        }
+        if ($selectedCollateral) {
+            $baseQuery->where('collateral_type', $selectedCollateral);
         }
 
         // Helper formatter for compact peso amounts in card descriptions

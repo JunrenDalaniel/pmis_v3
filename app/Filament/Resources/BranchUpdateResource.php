@@ -83,6 +83,7 @@ class BranchUpdateResource extends Resource
             ->actions([
                 ActionGroup::make([
                     LoanApplicationResource::getViewDocumentsTableAction(),
+                    LoanApplicationResource::getQuickUploadTableAction(),
                     Action::make('mark_verified')
                         ->label('Mark Verified / Clear Update')
                         ->icon('heroicon-o-check-circle')

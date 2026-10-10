@@ -5,6 +5,7 @@ namespace App\Filament\Concerns;
 use App\Models\User;
 use Filament\Notifications\DatabaseNotification;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 trait HandlesApprovalWorkflow
@@ -24,15 +25,20 @@ trait HandlesApprovalWorkflow
             // Branch accounts strictly cannot update stage condition / sub-status
             $data['sub_status'] = $this->record->sub_status ?? 'none';
 
-            // Branch accounts can ONLY transition Approved → Branch Updated
-            // All other approval_status changes are blocked at the backend level
-            $allowedTransitions = ['Branch Updated'];
-            if ($this->record->approval_status === 'Approved'
-                && in_array($data['approval_status'] ?? null, $allowedTransitions, true)) {
-                // Allow this specific transition
+            // Auto-transition Approved → Branch Updated when edited by Branch Specialist
+            $isBranchSpecialist = $currentUser?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist']) || $currentUser?->role?->code === 'mortgage_document_specialist';
+            if ($isBranchSpecialist && $this->record->approval_status === 'Approved') {
+                $data['approval_status'] = 'Branch Updated';
             } else {
-                // Lock the value back to whatever it currently is
-                $data['approval_status'] = $this->record->approval_status;
+                // Branch accounts can ONLY transition Approved → Branch Updated
+                // All other approval_status changes are locked to current value
+                $allowedTransitions = ['Branch Updated'];
+                if ($this->record->approval_status === 'Approved'
+                    && in_array($data['approval_status'] ?? null, $allowedTransitions, true)) {
+                    // Allow this specific transition
+                } else {
+                    $data['approval_status'] = $this->record->approval_status;
+                }
             }
         }
 
@@ -57,17 +63,6 @@ trait HandlesApprovalWorkflow
                 'note'    => $this->data['branch_comment'],
             ]);
             $this->data['branch_comment'] = '';
-        }
-
-        // ── Auto-flag approval_status as 'Branch Updated' if edited by Branch Specialist ─────
-        $isBranchUser = $currentUser?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist']) || $currentUser?->role?->code === 'mortgage_document_specialist';
-        if ($isBranchUser && $record->approval_status === 'Approved') {
-            $record->approval_status = 'Branch Updated';
-            // Use save() (not saveQuietly) so the model observer updates status_changed_at
-            $record->save();
-            // Send notification for this transition explicitly
-            static::sendApprovalNotification($record, $currentUser);
-            return; // skip the wasChanged check below since we just handled it
         }
 
         if (! $record->wasChanged('approval_status')) {
@@ -157,7 +152,7 @@ trait HandlesApprovalWorkflow
 
         // Insert directly into the notifications table (bypasses queue)
         foreach ($recipients as $recipient) {
-            \DB::table('notifications')->insert([
+            DB::table('notifications')->insert([
                 'id'              => Str::uuid()->toString(),
                 'type'            => DatabaseNotification::class,
                 'notifiable_type' => \App\Models\User::class,

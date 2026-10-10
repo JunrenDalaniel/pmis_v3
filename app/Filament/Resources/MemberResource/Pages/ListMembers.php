@@ -16,6 +16,7 @@ class ListMembers extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            MemberResource::getImportExcelAction(),
             Actions\CreateAction::make(),
         ];
     }
@@ -24,15 +25,15 @@ class ListMembers extends ListRecords
     {
         return [
             'all' => Tab::make('All Members')
-                ->badge(Member::count()),
+                ->badge(fn () => static::getResource()::getEloquentQuery()->count()),
 
             'active' => Tab::make('Active Members')
-                ->badge(Member::where('is_active', true)->count())
+                ->badge(fn () => static::getResource()::getEloquentQuery()->where('is_active', true)->count())
                 ->badgeColor('success')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('is_active', true)),
 
             'inactive' => Tab::make('Inactive Members')
-                ->badge(Member::where('is_active', false)->count())
+                ->badge(fn () => static::getResource()::getEloquentQuery()->where('is_active', false)->count())
                 ->badgeColor('danger')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('is_active', false)),
         ];
