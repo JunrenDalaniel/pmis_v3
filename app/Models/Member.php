@@ -28,6 +28,7 @@ class Member extends Model
     protected $fillable = [
         'member_no',
         'cid',
+        'ppsr_account_no',
         'first_name',
         'middle_name',
         'last_name',

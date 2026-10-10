@@ -58,7 +58,7 @@ trait InteractsWithDashboardFilters
         return match ($preset) {
             'this_month'   => 'This Month (' . now()->format('F Y') . ')',
             'last_month'   => 'Last Month (' . now()->subMonthNoOverflow()->format('F Y') . ')',
-            'midyear'      => 'Midyear (' . now()->startOfYear()->format('M d') . ' - ' . now()->startOfYear()->addMonths(5)->endOfMonth()->format('M d, Y') . ')',
+            'midyear'      => 'Midyear (' . now()->startOfYear()->format('F d') . ' - ' . now()->startOfYear()->addMonths(5)->endOfMonth()->format('F d, Y') . ')',
             'this_year'    => 'This Year (' . now()->year . ')',
             'last_year'    => 'Last Year (' . (now()->year - 1) . ')',
             'custom'       => 'Custom Range',

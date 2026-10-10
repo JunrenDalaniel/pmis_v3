@@ -215,7 +215,7 @@ class VehicleLtoDueReportPage extends Page implements HasTable
             ->columns([
                 TextColumn::make('loanApplication.created_at')
                     ->label('Date Filed')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->placeholder('—')
                     ->sortable(query: function (Builder $query, string $direction): Builder {
                         return $query->orderBy(
@@ -318,7 +318,7 @@ class VehicleLtoDueReportPage extends Page implements HasTable
                     }),
 
                 TextColumn::make('registration_renewal_date')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->sortable()
                     ->label('LTO Renewal Date')
                     ->summarize(

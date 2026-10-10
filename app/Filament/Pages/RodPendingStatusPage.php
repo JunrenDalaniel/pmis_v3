@@ -283,7 +283,7 @@ class RodPendingStatusPage extends Page implements HasTable
             ->columns([
                 TextColumn::make('created_at')
                     ->label('Date Filed')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->sortable(),
 
                 TextColumn::make('member.last_name')
@@ -400,7 +400,7 @@ class RodPendingStatusPage extends Page implements HasTable
 
                 TextColumn::make('rod_payment_date')
                     ->label('Date of Payment')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->placeholder('—')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -420,7 +420,7 @@ class RodPendingStatusPage extends Page implements HasTable
 
                 TextColumn::make('rod_release_date')
                     ->label('Release Date')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->placeholder('—')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

@@ -50,7 +50,7 @@
                                     </span>
                                 </div>
                                 <span style="font-size: 11px; color: #64748b;">
-                                    {{ $act->created_at ? $act->created_at->format('M d, Y h:i A') : '' }}
+                                    {{ $act->created_at ? $act->created_at->format('F d, Y h:i A') : '' }}
                                     ({{ $act->created_at ? $act->created_at->diffForHumans() : '' }})
                                 </span>
                             </div>

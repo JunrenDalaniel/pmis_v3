@@ -42,7 +42,7 @@ class ReportExportService
             'midyear' => [
                 now()->startOfYear()->toDateString(),
                 now()->startOfYear()->addMonths(5)->endOfMonth()->toDateString(),
-                'Midyear (' . now()->startOfYear()->format('M d') . ' - ' . now()->startOfYear()->addMonths(5)->endOfMonth()->format('M d, Y') . ')',
+                'Midyear (' . now()->startOfYear()->format('F d') . ' - ' . now()->startOfYear()->addMonths(5)->endOfMonth()->format('F d, Y') . ')',
             ],
             'this_year' => [
                 now()->startOfYear()->toDateString(),
@@ -518,7 +518,7 @@ class ReportExportService
 
             $rows[] = [
                 $index + 1,
-                $v->loanApplication?->created_at ? $v->loanApplication->created_at->format('M d, Y') : 'N/A',
+                $v->loanApplication?->created_at ? $v->loanApplication->created_at->format('F d, Y') : 'N/A',
                 $memberName,
                 $v->loanApplication?->branchOffice?->name ?? 'No Branch',
                 $loanAmount,
@@ -527,7 +527,7 @@ class ReportExportService
                 ($v->year_model ? "{$v->year_model} " : '') . ($v->vehicle_description ?: 'Vehicle'),
                 ($v->engine_no ?: 'N/A') . ' / ' . ($v->chassis_no ?: 'N/A'),
                 $approval,
-                $date ? Carbon::parse($date)->format('M d, Y') : 'None',
+                $date ? Carbon::parse($date)->format('F d, Y') : 'None',
                 $daysLeft,
                 $status,
             ];
@@ -629,7 +629,7 @@ class ReportExportService
 
             $rows[] = [
                 $index + 1,
-                $r->created_at ? $r->created_at->format('M d, Y') : 'N/A',
+                $r->created_at ? $r->created_at->format('F d, Y') : 'N/A',
                 $r->loan_account_no ?? '—',
                 $memberName,
                 $r->branchOffice?->name ?? 'No Branch',
@@ -638,7 +638,7 @@ class ReportExportService
                 $classification,
                 $r->status ?? 'N/A',
                 $notes,
-                $r->updated_at ? $r->updated_at->format('M d, Y') : 'N/A',
+                $r->updated_at ? $r->updated_at->format('F d, Y') : 'N/A',
             ];
         }
 
@@ -925,7 +925,7 @@ class ReportExportService
 
             $rows[] = [
                 '#'                  => $index + 1,
-                'Date Filed'         => $record->created_at ? $record->created_at->format('M d, Y') : '—',
+                'Date Filed'         => $record->created_at ? $record->created_at->format('F d, Y') : '—',
                 'Borrower Name'      => $record->member?->natural_full_name ?? $record->member?->full_name ?? '—',
                 'OIC Branch'         => $record->branchOffice?->name ?? '—',
                 'Loan Amount'        => (float) ($record->requested_amount ?? 0),

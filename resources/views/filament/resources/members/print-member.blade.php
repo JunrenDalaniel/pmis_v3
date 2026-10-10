@@ -326,7 +326,7 @@
                             <tbody>
                                 @foreach($loans as $loan)
                                     <tr>
-                                        <td style="color: #374151;">{{ $loan->created_at ? $loan->created_at->format('M d, Y') : '—' }}</td>
+                                        <td style="color: #374151;">{{ $loan->created_at ? $loan->created_at->format('F d, Y') : '—' }}</td>
                                         <td style="font-family: monospace; font-weight: 700; color: #111827;">{{ $loan->application_no ?? '—' }}</td>
                                         <td style="color: #374151;">{{ $loan->branchOffice?->name ?? '—' }}</td>
                                         <td style="text-align: right; font-weight: 600; color: #111827;">₱ {{ number_format($loan->requested_amount, 2) }}</td>

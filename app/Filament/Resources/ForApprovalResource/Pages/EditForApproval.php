@@ -124,7 +124,7 @@ class EditForApproval extends EditRecord
                     $currentNotes = $this->record->notes ? $this->record->notes . "\n\n" : '';
                     $this->record->update([
                         'approval_status' => 'Disapproved',
-                        'notes'           => $currentNotes . "[DISAPPROVAL REASON - " . now()->format('M d, Y h:i A') . "]:\n" . $data['disapproval_reason'],
+                        'notes'           => $currentNotes . "[DISAPPROVAL REASON - " . now()->format('F d, Y h:i A') . "]:\n" . $data['disapproval_reason'],
                     ]);
                     HandlesApprovalWorkflow::sendApprovalNotification($this->record, auth()->user());
                     Notification::make()

@@ -109,7 +109,7 @@ class VehicleRenewalAlertWidget extends BaseWidget
 
                 Tables\Columns\TextColumn::make('registration_renewal_date')
                     ->label('Renewal Date')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->sortable()
                     ->placeholder('Walang Petsa'),
 

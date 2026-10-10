@@ -151,7 +151,7 @@ class RodBranchResource extends Resource
                         $record->id,
                         $record->name ?? '',
                         $record->is_active ? 'Active' : 'Inactive',
-                        $record->created_at ? $record->created_at->format('M d, Y') : '',
+                        $record->created_at ? $record->created_at->format('F d, Y') : '',
                     ];
 
                     $sheet->fromArray([$dataRow], null, "A{$row}", true);

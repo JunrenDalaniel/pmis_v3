@@ -189,7 +189,7 @@
                 </span>
             </div>
             <div style="font-size: 11px; color: #334155; margin-top: 2px; font-weight: 500;">
-                {{ $activity->created_at ? $activity->created_at->format('M d, Y h:i:s A') : 'N/A' }}
+                {{ $activity->created_at ? $activity->created_at->format('F d, Y h:i:s A') : 'N/A' }}
             </div>
         </div>
     </div>

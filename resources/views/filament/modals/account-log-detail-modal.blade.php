@@ -66,7 +66,7 @@
             <div>
                 <div style="font-size: 11px; font-weight: 600; color: #64748b;">Login Timestamp</div>
                 <div style="font-weight: 600; color: #0f172a; margin-top: 2px;">
-                    {{ $log->login_at ? $log->login_at->format('M d, Y h:i:s A') : '—' }}
+                    {{ $log->login_at ? $log->login_at->format('F d, Y h:i:s A') : '—' }}
                 </div>
                 <div style="font-size: 11px; color: #64748b;">
                     {{ $log->login_at ? $log->login_at->diffForHumans() : '' }}
@@ -77,7 +77,7 @@
                 <div style="font-size: 11px; font-weight: 600; color: #64748b;">Logout Timestamp</div>
                 <div style="font-weight: 600; color: #0f172a; margin-top: 2px;">
                     @if($log->logout_at)
-                        {{ $log->logout_at->format('M d, Y h:i:s A') }}
+                        {{ $log->logout_at->format('F d, Y h:i:s A') }}
                     @elseif($log->is_active)
                         <span style="color: #059669; font-weight: 700;">Currently Logged In</span>
                     @else

@@ -179,7 +179,7 @@
                 <div class="report-title">{{ $data['title'] ?? 'EPEB Status Report' }}</div>
             </td>
             <td class="text-right" style="vertical-align: bottom;">
-                <span style="font-size: 8pt; color: #64748b;">Generated: {{ $data['metadata']['generated_at'] ?? now()->format('M d, Y h:i A') }}</span>
+                <span style="font-size: 8pt; color: #64748b;">Generated: {{ $data['metadata']['generated_at'] ?? now()->format('F d, Y h:i A') }}</span>
             </td>
         </tr>
     </table>

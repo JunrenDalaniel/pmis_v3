@@ -221,6 +221,12 @@ class MemberResource extends Resource
                                 ->prefixIcon('heroicon-o-document-text')
                                 ->mask('999-999-999-999')
                                 ->maxLength(255),
+                            TextInput::make('ppsr_account_no')
+                                ->label('PPSR Account No.')
+                                ->placeholder('e.g. PPSR-USR-12345')
+                                ->prefixIcon('heroicon-o-shield-check')
+                                ->helperText('Optional: Used for Chattel Mortgage registrations.')
+                                ->maxLength(255),
                             TextInput::make('email')
                                 ->label('Email Address')
                                 ->placeholder('e.g. member@example.com')
@@ -330,6 +336,15 @@ class MemberResource extends Resource
                                 ->icon('heroicon-o-document-text')
                                 ->copyable(),
 
+                            TextEntry::make('ppsr_account_no')
+                                ->label('PPSR Account No.')
+                                ->placeholder('—')
+                                ->fontFamily('mono')
+                                ->badge()
+                                ->color('info')
+                                ->icon('heroicon-o-shield-check')
+                                ->copyable(),
+
                             TextEntry::make('email')
                                 ->label('Email Address')
                                 ->icon('heroicon-o-envelope')
@@ -383,7 +398,7 @@ class MemberResource extends Resource
                     ->sortable('last_name'),
                 Tables\Columns\TextColumn::make('birth_date')
                     ->label('Date of Birth')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('sex')
@@ -409,7 +424,7 @@ class MemberResource extends Resource
                     ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Date Registered')
-                    ->dateTime('M d, Y')
+                    ->dateTime('F d, Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])

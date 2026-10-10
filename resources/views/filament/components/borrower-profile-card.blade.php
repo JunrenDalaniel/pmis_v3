@@ -11,7 +11,7 @@
         }
         $phone = $member->phone ?: ($member->mobile_no ?: 'None provided');
         $tin = $member->tin ?: 'None provided';
-        $bdate = $member->birth_date ? $member->birth_date->format('M d, Y') : '—';
+        $bdate = $member->birth_date ? $member->birth_date->format('F d, Y') : '—';
         $age = $member->birth_date ? ' (' . $member->birth_date->age . ' yrs)' : '';
         $branchName = $member->branchOffice?->name ?? 'Unassigned';
         $civil = $member->civil_status ?: '—';
@@ -41,6 +41,11 @@
                         @if($member->cid)
                             <span style="display: inline-block; padding: 2px 7px; border-radius: 6px; font-family: monospace; font-size: 11px; font-weight: 500; background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255, 255, 255, 0.1);">
                                 CID: {{ $member->cid }}
+                            </span>
+                        @endif
+                        @if($member->ppsr_account_no)
+                            <span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 11px; font-weight: 600; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3);" title="Registered Mortgagor PPSR Account">
+                                🛡️ PPSR: {{ $member->ppsr_account_no }}
                             </span>
                         @endif
                     </div>

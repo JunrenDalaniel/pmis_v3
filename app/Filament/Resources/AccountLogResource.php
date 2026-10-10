@@ -158,7 +158,7 @@ class AccountLogResource extends Resource
 
                 TextColumn::make('login_at')
                     ->label('Login Time')
-                    ->dateTime('M d, Y h:i:s A')
+                    ->dateTime('F d, Y h:i:s A')
                     ->description(fn (AccountLog $record): string => $record->login_at ? $record->login_at->diffForHumans() : '')
                     ->sortable(),
 
@@ -166,7 +166,7 @@ class AccountLogResource extends Resource
                     ->label('Logout Time')
                     ->formatStateUsing(function ($state, AccountLog $record): string {
                         if ($state) {
-                            return \Carbon\Carbon::parse($state)->format('M d, Y h:i:s A');
+                            return \Carbon\Carbon::parse($state)->format('F d, Y h:i:s A');
                         }
                         return $record->is_active ? '🟢 Currently Online' : '—';
                     })

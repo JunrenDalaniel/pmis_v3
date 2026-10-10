@@ -58,7 +58,7 @@
                 $author = $n->user?->name ?? 'System Staff';
                 $roleName = $n->user?->role?->name ?? ($n->user ? 'Staff' : 'System');
                 $stage = $n->stage ?? 'Comment';
-                $date = $n->created_at ? $n->created_at->format('M-d-Y h:i A') : 'N/A';
+                $date = $n->created_at ? $n->created_at->format('F d, Y h:i A') : 'N/A';
                 $timeAgo = $n->created_at ? $n->created_at->diffForHumans() : '';
 
                 $isBranch = str_contains(strtolower($stage), 'branch')

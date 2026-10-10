@@ -40,7 +40,9 @@ class AppServiceProvider extends ServiceProvider
         Event::subscribe(AuthenticationLogSubscriber::class);
 
         DatePicker::configureUsing(function (DatePicker $datePicker): void {
-            $datePicker->native(false);
+            $datePicker
+                ->native(false)
+                ->displayFormat('F d, Y');
         });
     }
 }

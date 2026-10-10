@@ -134,7 +134,7 @@
             'download_url'   => route('media.download', $media->id),
             'is_pdf'         => $isPdf,
             'is_image'       => $isImage,
-            'created_at'     => $media->created_at ? $media->created_at->format('M d, Y h:i A') : '',
+            'created_at'     => $media->created_at ? $media->created_at->format('F d, Y h:i A') : '',
         ];
     })->values()->toArray();
 

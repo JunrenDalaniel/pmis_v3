@@ -30,7 +30,7 @@ class LoanApplicationsRelationManager extends RelationManager
                     ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Date Filed')
-                    ->dateTime('M d, Y')
+                    ->dateTime('F d, Y')
                     ->icon('heroicon-o-calendar')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('branchOffice.name')

@@ -212,7 +212,7 @@ class DeficiencyAuditReportPage extends Page implements HasTable
             ->columns([
                 TextColumn::make('created_at')
                     ->label('Date Filed')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->sortable(),
 
                 TextColumn::make('loan_account_no')
@@ -291,7 +291,7 @@ class DeficiencyAuditReportPage extends Page implements HasTable
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('updated_at')
-                    ->date('M d, Y')
+                    ->date('F d, Y')
                     ->sortable()
                     ->label('Last Updated')
                     ->toggleable(isToggledHiddenByDefault: true),

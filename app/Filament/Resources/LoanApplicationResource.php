@@ -233,12 +233,18 @@ class LoanApplicationResource extends Resource
                                         'Divorced' => 'Divorced',
                                     ]),
                             ]),
-                            Grid::make(3)->schema([
+                            Grid::make(4)->schema([
                                 TextInput::make('tin')
                                     ->label('TIN (Taxpayer Identification Number)')
                                     ->placeholder('e.g. 123-456-789-000')
                                     ->prefixIcon('heroicon-o-document-text')
                                     ->mask('999-999-999-999')
+                                    ->maxLength(255),
+                                TextInput::make('ppsr_account_no')
+                                    ->label('PPSR Account No.')
+                                    ->placeholder('e.g. PPSR-USR-12345')
+                                    ->prefixIcon('heroicon-o-shield-check')
+                                    ->helperText('Optional: For Chattel Mortgage.')
                                     ->maxLength(255),
                                 TextInput::make('email')
                                     ->label('Email Address')
@@ -353,13 +359,13 @@ class LoanApplicationResource extends Resource
                         DatePicker::make('date_granted')
                             ->label('Date Granted')
                             ->native(false)
-                            ->displayFormat('M d, Y')
+                            ->displayFormat('F d, Y')
                             ->live()
                             ->maxDate(now()->addYear()),
                         DatePicker::make('maturity_date')
                             ->label('Maturity Date')
                             ->native(false)
-                            ->displayFormat('M d, Y')
+                            ->displayFormat('F d, Y')
                             ->minDate(fn ($get) => $get('date_granted') ?: null)
                             ->maxDate(now()->addYears(15))
                             ->afterOrEqual('date_granted')
@@ -428,7 +434,7 @@ class LoanApplicationResource extends Resource
                             foreach ($chattels as $c) {
                                 $plate = $c->plate_no ?: ($c->mv_file_no ?: 'No Plate');
                                 $desc = ($c->year_model ? "{$c->year_model} " : '') . ($c->vehicle_description ?: 'Vehicle');
-                                $renDate = $c->registration_renewal_date ? $c->registration_renewal_date->format('M d, Y') : 'No Date';
+                                $renDate = $c->registration_renewal_date ? $c->registration_renewal_date->format('F d, Y') : 'No Date';
                                 $html .= "
                                     <div class='flex items-center justify-between p-2.5 rounded-lg bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-800'>
                                         <div>
@@ -687,13 +693,13 @@ class LoanApplicationResource extends Resource
                         DatePicker::make('date_granted')
                             ->label('Date Granted')
                             ->native(false)
-                            ->displayFormat('M d, Y')
+                            ->displayFormat('F d, Y')
                             ->live()
                             ->maxDate(now()->addYear()),
                         DatePicker::make('maturity_date')
                             ->label('Maturity Date')
                             ->native(false)
-                            ->displayFormat('M d, Y')
+                            ->displayFormat('F d, Y')
                             ->minDate(fn ($get) => $get('date_granted') ?: null)
                             ->maxDate(now()->addYears(15))
                             ->afterOrEqual('date_granted')
@@ -1479,7 +1485,7 @@ class LoanApplicationResource extends Resource
                     DatePicker::make('date_granted')
                         ->label('Date Granted')
                         ->native(false)
-                        ->displayFormat('M d, Y')
+                        ->displayFormat('F d, Y')
                         ->default(fn (LoanApplication $record) => $record->date_granted ?? now())
                         ->live()
                         ->maxDate(now()->addYear())
@@ -1487,7 +1493,7 @@ class LoanApplicationResource extends Resource
                     DatePicker::make('maturity_date')
                         ->label('Maturity Date')
                         ->native(false)
-                        ->displayFormat('M d, Y')
+                        ->displayFormat('F d, Y')
                         ->default(fn (LoanApplication $record) => $record->maturity_date)
                         ->minDate(fn ($get) => $get('date_granted') ?: null)
                         ->maxDate(now()->addYears(15))
@@ -2149,8 +2155,8 @@ class LoanApplicationResource extends Resource
                     $cleanFileName = "{$docType}{$slugRef}_{$timestamp}{$suffix}.{$ext}";
 
                     $displayName = $totalFiles > 1
-                        ? "{$docType} Document " . (!empty($refNo) ? "({$refNo})" : date('M d, Y')) . " (Part " . ($index + 1) . ")"
-                        : "{$docType} Document " . (!empty($refNo) ? "({$refNo})" : date('M d, Y'));
+                        ? "{$docType} Document " . (!empty($refNo) ? "({$refNo})" : date('F d, Y')) . " (Part " . ($index + 1) . ")"
+                        : "{$docType} Document " . (!empty($refNo) ? "({$refNo})" : date('F d, Y'));
 
                     $mediaAdder = $record->addMedia($fullDiskPath);
                     $mediaAdder
@@ -2252,7 +2258,7 @@ class LoanApplicationResource extends Resource
                     };
 
                     $dataRow = [
-                        $record->created_at ? $record->created_at->format('M d, Y') : '—',
+                        $record->created_at ? $record->created_at->format('F d, Y') : '—',
                         $record->application_no ?? '—',
                         $record->member?->full_name ?? '—',
                         $record->member?->member_no ?? '—',
@@ -2266,8 +2272,8 @@ class LoanApplicationResource extends Resource
                         $deficiencyText,
                         $record->deficiency_notes ?: ($record->notes ?: '—'),
                         $record->loan_account_no ?? '—',
-                        $record->date_granted ? $record->date_granted->format('M d, Y') : '—',
-                        $record->maturity_date ? $record->maturity_date->format('M d, Y') : '—',
+                        $record->date_granted ? $record->date_granted->format('F d, Y') : '—',
+                        $record->maturity_date ? $record->maturity_date->format('F d, Y') : '—',
                     ];
 
                     $sheet->fromArray([$dataRow], null, "A{$row}", true);
@@ -2398,7 +2404,7 @@ class LoanApplicationResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Date Filed')
-                    ->dateTime('M d, Y')
+                    ->dateTime('F d, Y')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('application_no')
                     ->label('Application ID')

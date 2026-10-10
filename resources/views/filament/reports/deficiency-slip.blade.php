@@ -173,7 +173,7 @@
                 @if($record->loan_account_no)
                     <div style="font-size: 10.5px; font-family: monospace; font-weight: 600; color: #1e293b;">Acct #: {{ $record->loan_account_no }}</div>
                 @endif
-                <div style="font-size: 10px; color: #64748b;">Printed: {{ now()->format('M d, Y h:i A') }}</div>
+                <div style="font-size: 10px; color: #64748b;">Printed: {{ now()->format('F d, Y h:i A') }}</div>
             </td>
         </tr>
     </table>

@@ -87,7 +87,7 @@ class ActivityLogResource extends Resource
             ->columns([
                 TextColumn::make('created_at')
                     ->label('Timestamp')
-                    ->dateTime('M d, Y h:i:s A')
+                    ->dateTime('F d, Y h:i:s A')
                     ->description(fn (Activity $record): string => $record->created_at ? $record->created_at->diffForHumans() : '')
                     ->sortable(),
 
