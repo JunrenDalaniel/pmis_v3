@@ -58,27 +58,31 @@
 
         @foreach($rems as $r)
             @php
-                $tct = $r->tct_oct_no ?: 'No Title No.';
-                $lot = $r->lot_no ? "Lot {$r->lot_no}" : '—';
-                $blk = $r->block_no ? "Blk {$r->block_no}" : '—';
-                $area = $r->area_sqm ? "{$r->area_sqm} sqm" : '—';
-                $loc = $r->location ?: 'Location not specified';
-                $owner = $r->registered_owner ?: '—';
+                $titleNo = $r->title_number ?: ($r->tct_oct_no ?: 'No Title Number');
+                $owner = $r->title_owner_name ?: ($r->registered_owner ?: '—');
+                $loc = $r->location ?: '—';
+                $rodBranch = $r->rodBranch?->name ?: '—';
                 $remStatus = $r->rem_status ?: 'Active';
             @endphp
             <div style="border-radius: 12px; border: 1px solid rgba(156, 163, 175, 0.25); background: rgba(156, 163, 175, 0.05); padding: 14px 16px; width: 100%; box-sizing: border-box;">
                 <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(156, 163, 175, 0.2); padding-bottom: 8px; margin-bottom: 10px;">
-                    <div style="font-size: 13px; font-weight: 700;">
-                        🏠 Title # {{ $tct }}
+                    <div style="font-size: 13px; font-weight: 700; color: inherit;">
+                        🏠 <span>Title # :</span> <strong>{{ $titleNo }}</strong>
                     </div>
                     <span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3);">
                         {{ $remStatus }}
                     </span>
                 </div>
                 <div style="line-height: 1.65; font-size: 13px; color: inherit;">
-                    <div><span style="opacity: 0.8;">Lot / Blk / Area :</span> <strong>{{ $lot }} / {{ $blk }} ({{ $area }})</strong></div>
-                    <div><span style="opacity: 0.8;">Registered Owner :</span> <strong>{{ $owner }}</strong></div>
-                    <div><span style="opacity: 0.8;">Location :</span> <strong>{{ $loc }}</strong></div>
+                    <div>
+                        <span style="opacity: 0.8;">Registered Owner :</span> <strong>{{ $owner }}</strong>
+                    </div>
+                    <div>
+                        <span style="opacity: 0.8;">Location :</span> <strong>{{ $loc }}</strong>
+                    </div>
+                    <div>
+                        <span style="opacity: 0.8;">ROD Branch :</span> <strong>{{ $rodBranch }}</strong>
+                    </div>
                 </div>
             </div>
         @endforeach
