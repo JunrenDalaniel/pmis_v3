@@ -4,8 +4,10 @@ namespace App\Filament\Resources\MemberResource\RelationManagers;
 
 use Filament\Actions\Action;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class LoanApplicationsRelationManager extends RelationManager
 {
@@ -14,6 +16,38 @@ class LoanApplicationsRelationManager extends RelationManager
     protected static ?string $title = 'Loan Applications & Mortgage History';
 
     protected static string | \BackedEnum | null $icon = 'heroicon-o-document-duplicate';
+
+    public function getDefaultActiveTab(): string | int | null
+    {
+        return 'all';
+    }
+
+    public function getTabs(): array
+    {
+        return [
+            'all' => Tab::make('All Applications')
+                ->icon('heroicon-m-document-duplicate')
+                ->badge(fn () => $this->getOwnerRecord()->loanApplications()->count()),
+
+            'released' => Tab::make('Released Loans')
+                ->icon('heroicon-m-check-badge')
+                ->badge(fn () => $this->getOwnerRecord()->loanApplications()->whereIn('approval_status', ['Approved', 'Branch Updated'])->count())
+                ->badgeColor('success')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('approval_status', ['Approved', 'Branch Updated'])),
+
+            'pending' => Tab::make('Pending Applications')
+                ->icon('heroicon-m-clock')
+                ->badge(fn () => $this->getOwnerRecord()->loanApplications()->whereNotIn('approval_status', ['Approved', 'Branch Updated', 'Disapproved'])->count())
+                ->badgeColor('warning')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereNotIn('approval_status', ['Approved', 'Branch Updated', 'Disapproved'])),
+
+            'disapproved' => Tab::make('Disapproved')
+                ->icon('heroicon-m-x-circle')
+                ->badge(fn () => $this->getOwnerRecord()->loanApplications()->where('approval_status', 'Disapproved')->count())
+                ->badgeColor('danger')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('approval_status', 'Disapproved')),
+        ];
+    }
 
     public function table(Table $table): Table
     {
@@ -24,6 +58,7 @@ class LoanApplicationsRelationManager extends RelationManager
                     ->label('Application ID')
                     ->fontFamily('mono')
                     ->weight('bold')
+                    ->description(fn (\App\Models\LoanApplication $record): ?string => $record->loan_account_no ? 'Acct: ' . $record->loan_account_no : null)
                     ->copyable()
                     ->copyMessage('Application ID copied!')
                     ->searchable()
@@ -40,7 +75,12 @@ class LoanApplicationsRelationManager extends RelationManager
                     ->sortable(),
                 Tables\Columns\TextColumn::make('requested_amount')
                     ->label('Loan Amount')
-                    ->description(fn (\App\Models\LoanApplication $record): ?string => in_array($record->approval_status, ['Approved', 'Branch Updated']) ? null : 'Requested')
+                    ->description(function (\App\Models\LoanApplication $record): ?string {
+                        if (in_array($record->approval_status, ['Approved', 'Branch Updated'])) {
+                            return $record->date_granted ? 'Released: ' . $record->date_granted->format('F d, Y') : 'Released';
+                        }
+                        return 'Requested';
+                    })
                     ->money('PHP')
                     ->weight('bold')
                     ->sortable(),
@@ -49,8 +89,22 @@ class LoanApplicationsRelationManager extends RelationManager
                     ->badge()
                     ->color(fn ($state) => $state === 'real_estate_mortgage' ? 'primary' : 'warning')
                     ->formatStateUsing(fn ($state) => $state === 'real_estate_mortgage' ? 'Real Estate (REM)' : 'Chattel (CM)'),
+                Tables\Columns\TextColumn::make('approval_status')
+                    ->label('Release / Approval')
+                    ->badge()
+                    ->color(fn ($state) => match ($state) {
+                        'Approved', 'Branch Updated' => 'success',
+                        'Disapproved'                => 'danger',
+                        default                      => 'warning',
+                    })
+                    ->formatStateUsing(fn ($state) => match ($state) {
+                        'Approved', 'Branch Updated' => 'Released',
+                        'Disapproved'                => 'Disapproved',
+                        default                      => 'Pending Approval',
+                    })
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('status')
-                    ->label('Status')
+                    ->label('Stage')
                     ->badge()
                     ->color(fn ($state) => match ($state) {
                         'Initial Assessment' => 'gray',
