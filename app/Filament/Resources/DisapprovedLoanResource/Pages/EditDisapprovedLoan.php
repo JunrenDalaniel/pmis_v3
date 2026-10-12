@@ -16,6 +16,48 @@ class EditDisapprovedLoan extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('resubmit_for_evaluation')
+                ->label('Resubmit for Evaluation')
+                ->icon('heroicon-o-arrow-path')
+                ->color('warning')
+                ->visible(fn (): bool => $this->record->approval_status === 'Disapproved')
+                ->modalHeading(fn (): string => "Resubmit Loan: {$this->record->application_no}")
+                ->modalDescription('Submit this loan application back to Head Office for re-evaluation along with compliance or deficiency remarks.')
+                ->modalSubmitActionLabel('Confirm & Resubmit')
+                ->modalIcon('heroicon-o-arrow-path')
+                ->modalIconColor('warning')
+                ->form([
+                    \Filament\Forms\Components\Textarea::make('resubmission_notes')
+                        ->label('Comment / Resubmission Reason')
+                        ->placeholder('Specify the corrections made (e.g. Uploaded corrected PSA certificate, updated CTC of Title)...')
+                        ->required()
+                        ->rows(5),
+                ])
+                ->action(function (array $data) {
+                    $this->record->update([
+                        'approval_status'  => 'Pending Approval',
+                        'sub_status'       => 'none',
+                        'deficiency_notes' => null,
+                    ]);
+
+                    HandlesApprovalWorkflow::sendApprovalNotification($this->record, auth()->user());
+
+                    if (filled($data['resubmission_notes'] ?? null)) {
+                        $this->record->applicationNotes()->create([
+                            'user_id' => auth()->id() ?? $this->record->created_by_user_id,
+                            'stage'   => ($this->record->status ?? 'Initial Assessment') . ' (Branch Resubmission Comment)',
+                            'note'    => $data['resubmission_notes'],
+                        ]);
+                    }
+
+                    \Filament\Notifications\Notification::make()
+                        ->title('⏳ Loan Resubmitted for Evaluation')
+                        ->body("Application {$this->record->application_no} for " . ($this->record->member?->full_name ?? 'Borrower') . " has been returned to the Pending Approval queue.")
+                        ->warning()
+                        ->send();
+
+                    $this->redirect(\App\Filament\Resources\ForApprovalResource::getUrl('index'));
+                }),
             Actions\DeleteAction::make(),
         ];
     }
