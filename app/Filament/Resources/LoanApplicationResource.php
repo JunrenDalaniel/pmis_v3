@@ -879,19 +879,21 @@ class LoanApplicationResource extends Resource
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function ($state, callable $set) {
                                         if (blank($state)) return;
-                                        $monthVal = \App\Models\ChattelCollateral::computeRenewalMonthFromPlate($state);
-                                        if ($monthVal) {
-                                            $set('registration_renewal_date', $monthVal);
+                                        try {
+                                            $monthVal = \App\Models\ChattelCollateral::computeRenewalMonthFromPlate($state);
+                                            if ($monthVal) {
+                                                $set('registration_renewal_date', $monthVal);
 
-                                            $c = \Carbon\Carbon::parse($monthVal . '-01')->startOfMonth();
-                                            if ($c->isPast()) {
-                                                $set('cm_status', 'Expired');
-                                            } elseif ($c->diffInDays(now()) <= 30) {
-                                                $set('cm_status', 'Due for Renewal');
-                                            } else {
-                                                $set('cm_status', 'Active');
+                                                $c = \Carbon\Carbon::parse($monthVal . '-01')->startOfMonth();
+                                                if ($c->isPast()) {
+                                                    $set('cm_status', 'Expired');
+                                                } elseif ($c->diffInDays(now()) <= 30) {
+                                                    $set('cm_status', 'Due for Renewal');
+                                                } else {
+                                                    $set('cm_status', 'Active');
+                                                }
                                             }
-                                        }
+                                        } catch (\Throwable $e) {}
                                     }),
                             ]),
                             Grid::make(3)->schema([
@@ -1437,19 +1439,22 @@ class LoanApplicationResource extends Resource
             ->modalSubmitActionLabel('Confirm Approval')
             ->modalIcon('heroicon-o-check-circle')
             ->modalIconColor('success')
+            ->fillForm(fn (LoanApplication $record): array => [
+                'loan_account_no' => $record->loan_account_no,
+                'date_granted'    => $record->date_granted ?? now(),
+                'maturity_date'   => $record->maturity_date,
+            ])
             ->form([
                 Grid::make(3)->schema([
                     TextInput::make('loan_account_no')
                         ->label('Loan Account Number')
                         ->placeholder('e.g. LN-ACCT-2026-00123')
-                        ->default(fn (LoanApplication $record) => $record->loan_account_no)
                         ->required()
                         ->maxLength(255),
                     DatePicker::make('date_granted')
                         ->label('Date Granted')
                         ->native(false)
                         ->displayFormat('F d, Y')
-                        ->default(fn (LoanApplication $record) => $record->date_granted ?? now())
                         ->live()
                         ->maxDate(now()->addYear())
                         ->required(),
@@ -1457,7 +1462,6 @@ class LoanApplicationResource extends Resource
                         ->label('Maturity Date')
                         ->native(false)
                         ->displayFormat('F d, Y')
-                        ->default(fn (LoanApplication $record) => $record->maturity_date)
                         ->minDate(fn ($get) => $get('date_granted') ?: null)
                         ->maxDate(now()->addYears(15))
                         ->afterOrEqual('date_granted'),
@@ -1523,8 +1527,11 @@ class LoanApplicationResource extends Resource
                     ->rows(5),
             ])
             ->action(function (LoanApplication $record, array $data, $livewire): void {
+                $currentNotes = $record->notes ? $record->notes . "\n\n" : '';
                 $record->approval_status = 'Disapproved';
                 $record->sub_status = $data['deficiency_type'] ?? 'none';
+                $record->deficiency_notes = $data['disapproval_reason'];
+                $record->notes = $currentNotes . "[DISAPPROVAL REASON - " . now()->format('F d, Y h:i A') . "]:\n" . $data['disapproval_reason'];
                 $record->save();
 
                 // Send DB bell notification to current user + loan creator
