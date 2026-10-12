@@ -1009,12 +1009,25 @@ class LoanApplicationResource extends Resource
                         ->imageResizeTargetWidth('1200')
                         ->imageResizeTargetHeight('1200')
                         ->imageResizeUpscale(false)
-                        ->helperText('Strictly allowed file formats: .pdf, .jpg, .jpeg, .png, .webp (Images auto-resized to 1200px max for fast saving)')
+                        ->helperText(function (string $operation): string {
+                            $baseText = 'Strictly allowed file formats: .pdf, .jpg, .jpeg, .png, .webp (Images auto-resized to 1200px max for fast saving).';
+                            $isHoOrAdmin = auth()->user()?->isHeadOfficeUser() || auth()->user()?->hasRole(['super_admin', 'Super Admin']) || auth()->user()?->role?->code === 'super_admin';
+                            if ($operation !== 'create' && ! $isHoOrAdmin) {
+                                return $baseText . ' ⚠️ File deletion is restricted to Head Office / Admin. Branch accounts can only upload additional files.';
+                            }
+                            return $baseText;
+                        })
                         ->preserveFilenames()
                         ->multiple()
                         ->reorderable()
                         ->openable()
                         ->downloadable()
+                        ->deletable(function (string $operation): bool {
+                            if ($operation === 'create') {
+                                return true;
+                            }
+                            return (bool) (auth()->user()?->isHeadOfficeUser() || auth()->user()?->hasRole(['super_admin', 'Super Admin']) || auth()->user()?->role?->code === 'super_admin');
+                        })
                         ->panelLayout('grid')
                         ->imagePreviewHeight('180px')
                         ->columnSpanFull()
