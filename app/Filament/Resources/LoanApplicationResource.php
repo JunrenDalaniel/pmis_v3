@@ -94,6 +94,22 @@ class LoanApplicationResource extends Resource
         return $query;
     }
 
+    public static function getRecordRouteBindingEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery()
+            ->with(['member', 'branchOffice', 'chattelCollaterals', 'realEstateCollaterals']);
+
+        $user = auth()->user();
+        if ($user) {
+            $allowedBranches = $user->getAllowedBranchIds();
+            if (is_array($allowedBranches)) {
+                $query->whereIn('branch_office_id', $allowedBranches);
+            }
+        }
+
+        return $query;
+    }
+
     // public static function getGloballySearchableAttributes(): array
     // {
     //     return ['application_no', 'member.first_name', 'member.last_name', 'member.member_no'];

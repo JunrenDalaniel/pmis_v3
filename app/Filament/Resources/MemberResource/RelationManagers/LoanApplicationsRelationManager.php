@@ -292,7 +292,11 @@ class LoanApplicationsRelationManager extends RelationManager
                 Action::make('view_application')
                     ->label('Open / Edit Loan Record')
                     ->icon('heroicon-o-pencil-square')
-                    ->url(fn ($record) => \App\Filament\Resources\LoanApplicationResource::getUrl('edit', ['record' => $record])),
+                    ->url(fn ($record) => match ($record->approval_status) {
+                        'Approved', 'Branch Updated' => \App\Filament\Resources\LoanApplicationResource::getUrl('edit', ['record' => $record]),
+                        'Disapproved'                => \App\Filament\Resources\DisapprovedLoanResource::getUrl('edit', ['record' => $record]),
+                        default                      => \App\Filament\Resources\ForApprovalResource::getUrl('edit', ['record' => $record]),
+                    }),
             ]);
     }
 }

@@ -20,6 +20,17 @@ class EditLoanApplication extends EditRecord
         ];
     }
 
+    public function mount(int | string $record): void
+    {
+        parent::mount($record);
+
+        if ($this->record->approval_status === 'Pending Approval') {
+            $this->redirect(\App\Filament\Resources\ForApprovalResource::getUrl('edit', ['record' => $this->record]));
+        } elseif ($this->record->approval_status === 'Disapproved') {
+            $this->redirect(\App\Filament\Resources\DisapprovedLoanResource::getUrl('edit', ['record' => $this->record]));
+        }
+    }
+
 
     protected function getRedirectUrl(): string
     {
