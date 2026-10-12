@@ -7,11 +7,13 @@ use App\Filament\Resources\ForApprovalResource;
 use App\Models\LoanApplication;
 use Filament\Actions;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Schemas\Components\Grid;
 
 class EditForApproval extends EditRecord
 {
@@ -26,111 +28,119 @@ class EditForApproval extends EditRecord
                 ->label('Approve Loan')
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
-                ->modalHeading('Approve Loan Application')
-                ->modalDescription('Confirm loan approval and set official release details.')
-                ->modalSubmitActionLabel('Confirm & Approve')
+                ->modalHeading(fn (): string => "Approve Loan: {$this->record->application_no}")
+                ->modalDescription('Confirm loan approval and set the granted loan account details.')
+                ->modalSubmitActionLabel('Confirm Approval')
                 ->modalIcon('heroicon-o-check-circle')
                 ->modalIconColor('success')
                 ->visible(fn (): bool => ! in_array($this->record->approval_status, ['Approved', 'Branch Updated']) && (! auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist']) && auth()->user()?->role?->code !== 'mortgage_document_specialist'))
                 ->form([
-                    TextInput::make('loan_account_no')
-                        ->label('Loan Account Number')
-                        ->placeholder('e.g. LN-ACCT-2026-00123')
-                        ->default(fn () => $this->record->loan_account_no)
-                        ->required(),
-                    DatePicker::make('date_granted')
-                        ->label('Date Granted')
-                        ->native(false)
-                        ->default(fn () => $this->record->date_granted ?: now()->toDateString())
-                        ->required(),
-                    DatePicker::make('maturity_date')
-                        ->label('Maturity Date')
-                        ->native(false)
-                        ->default(fn () => $this->record->maturity_date)
-                        ->required(),
+                    Grid::make(3)->schema([
+                        TextInput::make('loan_account_no')
+                            ->label('Loan Account Number')
+                            ->placeholder('e.g. LN-ACCT-2026-00123')
+                            ->default(fn () => $this->record->loan_account_no)
+                            ->required()
+                            ->maxLength(255),
+                        DatePicker::make('date_granted')
+                            ->label('Date Granted')
+                            ->native(false)
+                            ->displayFormat('F d, Y')
+                            ->default(fn () => $this->record->date_granted ?? now())
+                            ->live()
+                            ->maxDate(now()->addYear())
+                            ->required(),
+                        DatePicker::make('maturity_date')
+                            ->label('Maturity Date')
+                            ->native(false)
+                            ->displayFormat('F d, Y')
+                            ->default(fn () => $this->record->maturity_date)
+                            ->minDate(fn ($get) => $get('date_granted') ?: null)
+                            ->maxDate(now()->addYears(15))
+                            ->afterOrEqual('date_granted'),
+                    ]),
+                    Textarea::make('approval_notes')
+                        ->label('Comment / Approval Reason (Optional)')
+                        ->placeholder('Enter any evaluation comments or approval reasons...')
+                        ->rows(5),
                 ])
                 ->action(function (array $data) {
                     $this->record->update([
                         'approval_status' => 'Approved',
-                        'loan_account_no' => $data['loan_account_no'],
-                        'date_granted'    => $data['date_granted'],
-                        'maturity_date'   => $data['maturity_date'],
+                        'loan_account_no' => $data['loan_account_no'] ?? $this->record->loan_account_no,
+                        'date_granted'    => $data['date_granted'] ?? $this->record->date_granted,
+                        'maturity_date'   => $data['maturity_date'] ?? $this->record->maturity_date,
                     ]);
+
                     HandlesApprovalWorkflow::sendApprovalNotification($this->record, auth()->user());
+
+                    if (filled($data['approval_notes'] ?? null)) {
+                        $this->record->applicationNotes()->create([
+                            'user_id' => auth()->id() ?? $this->record->created_by_user_id,
+                            'stage'   => ($this->record->status ?? 'Initial Assessment') . ' (Approval Comment)',
+                            'note'    => $data['approval_notes'],
+                        ]);
+                    }
+
                     Notification::make()
-                        ->title('Loan Approved Successfully')
-                        ->body("Application {$this->record->application_no} has been approved.")
+                        ->title('✅ Loan Application Approved')
+                        ->body("Application {$this->record->application_no} for " . ($this->record->member?->full_name ?? 'Borrower') . " has been APPROVED.")
                         ->success()
                         ->send();
+
                     $this->redirect(static::getResource()::getUrl('index'));
                 }),
 
-            Actions\Action::make('tag_deficiency')
-                ->label('Tag Deficiency')
-                ->icon('heroicon-o-exclamation-triangle')
-                ->color('warning')
-                ->modalHeading('Tag Document Deficiency')
-                ->modalDescription('Flag missing requirements or documentation discrepancies.')
-                ->modalSubmitActionLabel('Save Deficiency Findings')
-                ->modalIcon('heroicon-o-exclamation-triangle')
-                ->modalIconColor('warning')
-                ->visible(fn (): bool => ! auth()->user()?->isBranchUser())
-                ->form([
-                    Select::make('sub_status')
-                        ->label('Deficiency Classification')
-                        ->options([
-                            'internal_deficiency' => '🏢 Internal Deficiency (Branch documentation/signatures)',
-                            'external_deficiency' => '🏛️ External Deficiency (ROD, LTO, BIR, PPSR, etc.)',
-                        ])
-                        ->default(fn () => in_array($this->record->sub_status, ['internal_deficiency', 'external_deficiency']) ? $this->record->sub_status : 'internal_deficiency')
-                        ->required(),
-                    Textarea::make('deficiency_notes')
-                        ->label('Deficiency Findings / Requirements Needed')
-                        ->placeholder('Specify missing documents, signatures, or instructions...')
-                        ->default(fn () => $this->record->deficiency_notes)
-                        ->rows(4)
-                        ->required(),
-                ])
-                ->action(function (array $data) {
-                    $this->record->update([
-                        'sub_status'       => $data['sub_status'],
-                        'deficiency_notes' => $data['deficiency_notes'],
-                    ]);
-                    Notification::make()
-                        ->title('Deficiency Findings Saved')
-                        ->warning()
-                        ->send();
-                    $this->fillForm();
-                }),
-
             Actions\Action::make('disapprove_loan')
-                ->label('Disapprove')
+                ->label('Disapprove Loan')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
-                ->modalHeading('Confirm Disapproval')
-                ->modalDescription('Reject this loan application due to unresolved issues or borrower failure to comply.')
+                ->modalHeading(fn (): string => "Disapprove Loan: {$this->record->application_no}")
+                ->modalDescription('Specify the deficiency type and reason for disapproving this loan application.')
                 ->modalSubmitActionLabel('Confirm Disapproval')
                 ->modalIcon('heroicon-o-x-circle')
                 ->modalIconColor('danger')
                 ->visible(fn (): bool => ! in_array($this->record->approval_status, ['Disapproved']) && ! auth()->user()?->isBranchUser())
                 ->form([
-                    Textarea::make('disapproval_reason')
-                        ->label('Official Reason for Disapproval')
-                        ->placeholder('State specific reasons why this application is disapproved...')
+                    Radio::make('deficiency_type')
+                        ->label('Deficiency Type')
+                        ->options([
+                            'internal_deficiency' => '🏢 Internal Deficiency — Missing/incomplete documents from the branch or internal process',
+                            'external_deficiency' => '🏛️ External Deficiency — Issues with external agencies (BIR, ROD, LTO, Assessor, etc.)',
+                        ])
                         ->required()
-                        ->rows(4),
+                        ->columnSpanFull(),
+                    Textarea::make('disapproval_reason')
+                        ->label('Comment / Disapproval Reason')
+                        ->placeholder('Specify the required corrections, missing documents, or disapproval reason...')
+                        ->required()
+                        ->rows(5),
                 ])
                 ->action(function (array $data) {
                     $currentNotes = $this->record->notes ? $this->record->notes . "\n\n" : '';
                     $this->record->update([
-                        'approval_status' => 'Disapproved',
-                        'notes'           => $currentNotes . "[DISAPPROVAL REASON - " . now()->format('F d, Y h:i A') . "]:\n" . $data['disapproval_reason'],
+                        'approval_status'  => 'Disapproved',
+                        'sub_status'       => $data['deficiency_type'] ?? 'none',
+                        'deficiency_notes' => $data['disapproval_reason'],
+                        'notes'            => $currentNotes . "[DISAPPROVAL REASON - " . now()->format('F d, Y h:i A') . "]:\n" . $data['disapproval_reason'],
                     ]);
+
                     HandlesApprovalWorkflow::sendApprovalNotification($this->record, auth()->user());
+
+                    if (filled($data['disapproval_reason'] ?? null)) {
+                        $this->record->applicationNotes()->create([
+                            'user_id' => auth()->id() ?? $this->record->created_by_user_id,
+                            'stage'   => ($this->record->status ?? 'Initial Assessment') . ' (Disapproved Comment)',
+                            'note'    => $data['disapproval_reason'],
+                        ]);
+                    }
+
                     Notification::make()
-                        ->title('Loan Disapproved')
+                        ->title('❌ Loan Application Disapproved')
+                        ->body("Application {$this->record->application_no} has been marked as DISAPPROVED.")
                         ->danger()
                         ->send();
+
                     $this->redirect(static::getResource()::getUrl('index'));
                 }),
 
