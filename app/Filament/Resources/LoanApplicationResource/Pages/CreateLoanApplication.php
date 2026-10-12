@@ -65,6 +65,11 @@ class CreateLoanApplication extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
+        $user = auth()->user();
+        if ($user?->isBranchUser() || $user?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist']) || $user?->role?->code === 'mortgage_document_specialist') {
+            return ForApprovalResource::getUrl('index');
+        }
+
         return ForApprovalResource::getUrl('edit', ['record' => $this->record]);
     }
 }

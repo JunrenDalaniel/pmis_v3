@@ -65,8 +65,10 @@ class EditForApproval extends EditRecord
                         ->rows(5),
                 ])
                 ->action(function (array $data) {
+                    $newStatus = ($this->record->status === 'Initial Assessment' || blank($this->record->status)) ? 'For Notary' : $this->record->status;
                     $this->record->update([
                         'approval_status' => 'Approved',
+                        'status'          => $newStatus,
                         'loan_account_no' => $data['loan_account_no'] ?? $this->record->loan_account_no,
                         'date_granted'    => $data['date_granted'] ?? $this->record->date_granted,
                         'maturity_date'   => $data['maturity_date'] ?? $this->record->maturity_date,

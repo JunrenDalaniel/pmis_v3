@@ -506,24 +506,17 @@ class LoanApplicationResource extends Resource
                         ->dehydrated()
                         ->live()
                         ->required(),
-
-                    Textarea::make('deficiency_notes')
-                        ->label('Deficiency Findings / Requirements')
-                        ->placeholder('Specify missing requirements, discrepancy details, or instructions for compliance...')
-                        ->rows(3)
-                        ->autosize()
-                        ->visible(fn ($get) => in_array($get('sub_status'), ['internal_deficiency', 'external_deficiency']))
-                        ->columnSpanFull(),
                 ]),
 
-            // SECTION 2D: Evaluator Findings & Specific Remarks
+            // SECTION 2D: Evaluator Findings & Remarks (Serving as official deficiency & assessment notes)
             'evaluator_notes_section' => Section::make('Evaluator Findings & Remarks')
-                ->description('Head Office evaluation findings, deficiency remarks, or specific instructions')
+                ->description('Head Office deficiency findings, evaluation remarks, and compliance instructions')
                 ->icon('heroicon-o-pencil-square')
                 ->schema([
                     Textarea::make('notes')
-                        ->label('Application Notes / Remarks (Head Office Assessment)')
-                        ->placeholder('Enter official assessment notes, specific findings, or instructions...')
+                        ->label('Evaluation & Deficiency Remarks')
+                        ->placeholder('Specify missing requirements, discrepancy details, deficiency findings, or compliance instructions...')
+                        ->rows(4)
                         ->autosize()
                         ->disabled(fn () => (
                             auth()->user()?->isBranchUser()
@@ -535,7 +528,7 @@ class LoanApplicationResource extends Resource
                             auth()->user()?->isBranchUser()
                             || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
                             || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
-                        ) ? '🔒 Official assessment remarks are strictly managed by Head Office Evaluators.' : null)
+                        ) ? '🔒 Official assessment and deficiency remarks are strictly managed by Head Office Evaluators.' : 'Official assessment & deficiency guidance for branch compliance.')
                         ->columnSpanFull(),
                 ]),
 
@@ -1122,7 +1115,7 @@ class LoanApplicationResource extends Resource
                         ->icon('heroicon-o-shield-check')
                         ->compact()
                         ->collapsible()
-                        ->visible(fn ($get) => in_array($get('collateral_type'), ['chattel_mortgage', 'cm_amendment']))
+                        ->visible(fn ($get) => in_array($get('collateral_type'), ['chattel_mortgage', 'cm_certification', 'cm_amendment']))
                         ->schema([
                             Grid::make(['default' => 1, 'md' => 2])->schema([
                                 TextInput::make('ppsr_notice_no')
@@ -1142,7 +1135,7 @@ class LoanApplicationResource extends Resource
                         ->icon('heroicon-o-truck')
                         ->compact()
                         ->collapsible()
-                        ->visible(fn ($get) => $get('collateral_type') === 'chattel_mortgage')
+                        ->visible(fn ($get) => in_array($get('collateral_type'), ['chattel_mortgage', 'cm_certification', 'cm_amendment']))
                         ->schema([
                             Grid::make(['default' => 1, 'md' => 2])->schema([
                                 TextInput::make('lto_office')
@@ -1473,6 +1466,9 @@ class LoanApplicationResource extends Resource
             ])
             ->action(function (LoanApplication $record, array $data, $livewire): void {
                 $record->approval_status = 'Approved';
+                if ($record->status === 'Initial Assessment' || blank($record->status)) {
+                    $record->status = 'For Notary';
+                }
                 $record->loan_account_no = $data['loan_account_no'] ?? $record->loan_account_no;
                 $record->date_granted = $data['date_granted'] ?? $record->date_granted;
                 $record->maturity_date = $data['maturity_date'] ?? $record->maturity_date;
