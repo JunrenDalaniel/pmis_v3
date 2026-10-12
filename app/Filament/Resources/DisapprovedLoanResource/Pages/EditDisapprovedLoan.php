@@ -63,7 +63,44 @@ class EditDisapprovedLoan extends EditRecord
     }
 
 
-    protected function getRedirectUrl(): string
+    protected function getFormActions(): array
+    {
+        return [
+            $this->getSaveFormAction(),
+            Actions\Action::make('saveAndClose')
+                ->label('Save & Close')
+                ->color('gray')
+                ->action('saveAndClose'),
+            $this->getCancelFormAction(),
+        ];
+    }
+
+    public function saveAndClose(): void
+    {
+        $this->save(shouldRedirect: false);
+
+        $nonReleasedStages = [
+            'Initial Assessment',
+            'For Notary',
+            'Notarized',
+            'For BIR', 'For Bir',
+            'BIR Paid', 'Bir Paid',
+            'For ROD', 'For Rod',
+        ];
+
+        $url = match ($this->record->approval_status) {
+            'Pending Approval' => \App\Filament\Resources\ForApprovalResource::getUrl('index'),
+            'Branch Updated'   => \App\Filament\Resources\BranchUpdateResource::getUrl('index'),
+            'Approved'         => !in_array($this->record->status, $nonReleasedStages)
+                ? \App\Filament\Resources\LoanApplicationResource::getUrl('index')
+                : \App\Filament\Resources\DisapprovedLoanResource::getUrl('index'),
+            default            => \App\Filament\Resources\DisapprovedLoanResource::getUrl('index'),
+        };
+
+        $this->redirect($url);
+    }
+
+    protected function getRedirectUrl(): ?string
     {
         $nonReleasedStages = [
             'Initial Assessment',
@@ -80,7 +117,7 @@ class EditDisapprovedLoan extends EditRecord
             'Approved'         => !in_array($this->record->status, $nonReleasedStages)
                 ? \App\Filament\Resources\LoanApplicationResource::getUrl('index')
                 : \App\Filament\Resources\DisapprovedLoanResource::getUrl('index'),
-            default            => \App\Filament\Resources\DisapprovedLoanResource::getUrl('index'),
+            default            => null,
         };
     }
 }

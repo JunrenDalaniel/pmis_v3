@@ -32,13 +32,39 @@ class EditLoanApplication extends EditRecord
     }
 
 
-    protected function getRedirectUrl(): string
+    protected function getFormActions(): array
+    {
+        return [
+            $this->getSaveFormAction(),
+            Actions\Action::make('saveAndClose')
+                ->label('Save & Close')
+                ->color('gray')
+                ->action('saveAndClose'),
+            $this->getCancelFormAction(),
+        ];
+    }
+
+    public function saveAndClose(): void
+    {
+        $this->save(shouldRedirect: false);
+
+        $url = match ($this->record->approval_status) {
+            'Pending Approval' => \App\Filament\Resources\ForApprovalResource::getUrl('index'),
+            'Disapproved'      => \App\Filament\Resources\DisapprovedLoanResource::getUrl('index'),
+            'Branch Updated'   => \App\Filament\Resources\BranchUpdateResource::getUrl('index'),
+            default            => static::getResource()::getUrl('index'),
+        };
+
+        $this->redirect($url);
+    }
+
+    protected function getRedirectUrl(): ?string
     {
         return match ($this->record->approval_status) {
             'Pending Approval' => \App\Filament\Resources\ForApprovalResource::getUrl('index'),
             'Disapproved'      => \App\Filament\Resources\DisapprovedLoanResource::getUrl('index'),
             'Branch Updated'   => \App\Filament\Resources\BranchUpdateResource::getUrl('index'),
-            default            => static::getResource()::getUrl('index'),
+            default            => null,
         };
     }
 }
