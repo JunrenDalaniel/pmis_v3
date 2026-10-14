@@ -17,7 +17,7 @@ class CreateLoanApplication extends CreateRecord
 
     public function getTitle(): string
     {
-        return 'New Mortgage Application';
+        return 'New Application';
     }
 
     public function getSteps(): array

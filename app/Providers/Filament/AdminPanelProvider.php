@@ -35,7 +35,10 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->brandName('OIC PMIS v3 Portal')
+            ->brandName('PMIS — Progressive Mortgage Information System')
+            ->brandLogo(fn () => view('filament.components.brand-logo'))
+            ->brandLogoHeight('3.25rem')
+            ->favicon(asset('images/favicon.png'))
             ->login()
             ->colors([
                 'primary' => Color::Indigo,
@@ -46,6 +49,10 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_AFTER,
                 fn () => view('filament.components.topbar-new-mortgage-action'),
+            )
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn () => view('filament.components.dark-theme-topbar-styles'),
             )
             ->navigationGroups([
                 NavigationGroup::make('Membership Management'),
