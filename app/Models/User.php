@@ -10,6 +10,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
+use App\Models\BranchOffice;
+use App\Models\Role;
 
 class User extends Authenticatable
 {
@@ -108,13 +110,13 @@ class User extends Authenticatable
 
         // 2. Area Manager Role Fallback (Area 1, Area 2, Area 3)
         if ($this->hasRole(['Area Manager 1 (AM1)', 'area_manager_1']) || $this->role?->code === 'area_manager_1') {
-            return BranchOffice::where('area', 'like', '%Area 1%')->pluck('id')->toArray();
+            return BranchOffice::where('area', 'Area 1')->pluck('id')->toArray();
         }
         if ($this->hasRole(['Area Manager 2 (AM2)', 'area_manager_2']) || $this->role?->code === 'area_manager_2') {
-            return BranchOffice::where('area', 'like', '%Area 2%')->pluck('id')->toArray();
+            return BranchOffice::where('area', 'Area 2')->pluck('id')->toArray();
         }
         if ($this->hasRole(['Area Manager 3 (AM3)', 'area_manager_3']) || $this->role?->code === 'area_manager_3') {
-            return BranchOffice::where('area', 'like', '%Area 3%')->pluck('id')->toArray();
+            return BranchOffice::where('area', 'Area 3')->pluck('id')->toArray();
         }
 
         // 3. Single Primary Branch Assignment

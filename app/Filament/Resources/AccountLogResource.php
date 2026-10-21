@@ -40,7 +40,7 @@ class AccountLogResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         $user = auth()->user();
-        $query = AccountLog::active();
+        $query = AccountLog::active()->where('login_at', '>=', now()->subHours(8));
 
         if ($user) {
             $allowedBranches = $user->getAllowedBranchIds();
@@ -76,12 +76,14 @@ class AccountLogResource extends Resource
                     ->color(fn (string $state): string => match ($state) {
                         'active'     => 'success',
                         'logged_out' => 'gray',
+                        'timed_out'  => 'warning',
                         'failed'     => 'danger',
                         default      => 'gray',
                     })
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'active'     => '🟢 Active Now',
                         'logged_out' => '⚪ Logged Out',
+                        'timed_out'  => '⏱️ Timed Out (Idle)',
                         'failed'     => '🔴 Failed Attempt',
                         default      => ucfirst($state),
                     })
@@ -212,6 +214,7 @@ class AccountLogResource extends Resource
                     ->options([
                         'active'     => 'Active Sessions Now',
                         'logged_out' => 'Logged Out',
+                        'timed_out'  => 'Timed Out (Idle)',
                         'failed'     => 'Failed Attempts',
                     ]),
 

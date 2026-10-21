@@ -18,7 +18,16 @@
                 $engine = $c->engine_no ?: '—';
                 $chassis = $c->chassis_no ?: '—';
                 $mvFile = $c->mv_file_no ?: '—';
-                $renDate = $c->registration_renewal_date ? $c->registration_renewal_date->format('F d, Y') : 'No Date';
+                $renDate = 'No Date';
+                if ($c->registration_renewal_date instanceof \DateTimeInterface) {
+                    $renDate = $c->registration_renewal_date->format('F d, Y');
+                } elseif (! empty($c->registration_renewal_date)) {
+                    try {
+                        $renDate = \Carbon\Carbon::parse($c->registration_renewal_date)->format('F d, Y');
+                    } catch (\Throwable $e) {
+                        $renDate = (string) $c->registration_renewal_date;
+                    }
+                }
                 $encumbered = $c->encumbered_to ?: 'NEW';
             @endphp
             <div style="border-radius: 12px; border: 1px solid rgba(156, 163, 175, 0.25); background: rgba(156, 163, 175, 0.05); padding: 14px 16px; width: 100%; box-sizing: border-box;">

@@ -38,24 +38,28 @@ class ActivityLogResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $user = auth()->user();
-        $query = Activity::whereDate('created_at', today());
+        $userId = auth()->id() ?? 'guest';
 
-        if ($user) {
-            $allowedBranches = $user->getAllowedBranchIds();
-            if ($allowedBranches !== null) {
-                $branchNames = \App\Models\BranchOffice::whereIn('id', $allowedBranches)->pluck('name')->toArray();
-                $query->where(function (Builder $q) use ($allowedBranches, $branchNames, $user) {
-                    $q->whereIn('properties->branch_office_id', $allowedBranches)
-                      ->orWhereIn('properties->branch', $branchNames)
-                      ->orWhereHasMorph('causer', [\App\Models\User::class], fn ($uq) => $uq->whereIn('branch_office_id', $allowedBranches)->orWhere('id', $user->id))
-                      ->orWhereHasMorph('subject', [\App\Models\LoanApplication::class], fn ($lq) => $lq->whereIn('branch_office_id', $allowedBranches));
-                });
+        return cache()->remember("nav_badge_activity_logs_{$userId}", 30, function () {
+            $user = auth()->user();
+            $query = Activity::whereDate('created_at', today());
+
+            if ($user) {
+                $allowedBranches = $user->getAllowedBranchIds();
+                if ($allowedBranches !== null) {
+                    $branchNames = \App\Models\BranchOffice::whereIn('id', $allowedBranches)->pluck('name')->toArray();
+                    $query->where(function (Builder $q) use ($allowedBranches, $branchNames, $user) {
+                        $q->whereIn('properties->branch_office_id', $allowedBranches)
+                          ->orWhereIn('properties->branch', $branchNames)
+                          ->orWhereHasMorph('causer', [\App\Models\User::class], fn ($uq) => $uq->whereIn('branch_office_id', $allowedBranches)->orWhere('id', $user->id))
+                          ->orWhereHasMorph('subject', [\App\Models\LoanApplication::class], fn ($lq) => $lq->whereIn('branch_office_id', $allowedBranches));
+                    });
+                }
             }
-        }
 
-        $count = $query->count();
-        return $count > 0 ? (string) $count : null;
+            $count = $query->count();
+            return $count > 0 ? (string) $count : null;
+        });
     }
 
     public static function getNavigationBadgeColor(): ?string

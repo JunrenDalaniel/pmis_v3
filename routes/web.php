@@ -12,6 +12,12 @@ Route::get('/', function () {
 // Filament uses 'filament.admin.auth.login' but Laravel core looks for 'login'.
 Route::get('/login', fn () => redirect()->route('filament.admin.auth.login'))->name('login');
 
+// Inactivity Session Management
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::post('/admin/session/keep-alive', [\App\Http\Controllers\Auth\IdleSessionController::class, 'keepAlive'])->name('admin.session.keep-alive');
+    Route::post('/admin/session/idle-logout', [\App\Http\Controllers\Auth\IdleSessionController::class, 'idleLogout'])->name('admin.session.idle-logout');
+});
+
 
 Route::middleware(['auth'])->get('/media-preview/{media}/{filename?}', function (\Spatie\MediaLibrary\MediaCollections\Models\Media $media, ?string $filename = null) {
     // IDOR protection: verify user can access the model that owns this media

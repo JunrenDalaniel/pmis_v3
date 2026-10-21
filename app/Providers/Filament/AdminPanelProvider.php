@@ -54,6 +54,14 @@ class AdminPanelProvider extends PanelProvider
                 PanelsRenderHook::HEAD_END,
                 fn () => view('filament.components.dark-theme-topbar-styles'),
             )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn () => view('filament.components.inactivity-detector'),
+            )
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
+                fn () => view('filament.components.login-inactivity-banner'),
+            )
             ->navigationGroups([
                 NavigationGroup::make('Membership Management'),
                 NavigationGroup::make('Loan Operations'),

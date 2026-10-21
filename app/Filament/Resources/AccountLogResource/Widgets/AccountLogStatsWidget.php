@@ -30,6 +30,19 @@ class AccountLogStatsWidget extends BaseWidget
 
     protected function getStats(): array
     {
+        // Self-heal stale sessions (e.g. abandoned sessions older than 8 hours or from prior days)
+        AccountLog::where('status', 'active')
+            ->whereNull('logout_at')
+            ->where(function ($q) {
+                $q->where('login_at', '<', now()->subHours(8))
+                  ->orWhereDate('login_at', '<', today());
+            })
+            ->update([
+                'status' => 'timed_out',
+                'logout_at' => now(),
+                'failure_reason' => 'Session expired (Browser closed without logout)',
+            ]);
+
         $base = $this->getBaseQuery();
         $activeUsers = (int) ((clone $base)->active()->whereNotNull('user_id')->selectRaw('COUNT(DISTINCT user_id) as aggregate')->value('aggregate') ?? 0);
         $loginsToday = (clone $base)->today()->where('status', '!=', 'failed')->count();
