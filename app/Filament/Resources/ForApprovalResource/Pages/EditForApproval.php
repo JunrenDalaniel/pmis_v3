@@ -113,18 +113,17 @@ class EditForApproval extends EditRecord
                         ->required()
                         ->columnSpanFull(),
                     Textarea::make('disapproval_reason')
-                        ->label('Comment / Disapproval Reason')
+                        ->label('Official Remarks / Disapproval Reason')
                         ->placeholder('Specify the required corrections, missing documents, or disapproval reason...')
+                        ->default(fn () => $this->record->notes)
                         ->required()
                         ->rows(5),
                 ])
                 ->action(function (array $data) {
-                    $currentNotes = $this->record->notes ? $this->record->notes . "\n\n" : '';
                     $this->record->update([
-                        'approval_status'  => 'Disapproved',
-                        'sub_status'       => $data['deficiency_type'] ?? 'none',
-                        'deficiency_notes' => $data['disapproval_reason'],
-                        'notes'            => $currentNotes . "[DISAPPROVAL REASON - " . now()->format('F d, Y h:i A') . "]:\n" . $data['disapproval_reason'],
+                        'approval_status' => 'Disapproved',
+                        'sub_status'      => $data['deficiency_type'] ?? 'none',
+                        'notes'           => $data['disapproval_reason'],
                     ]);
 
                     HandlesApprovalWorkflow::sendApprovalNotification($this->record, auth()->user());

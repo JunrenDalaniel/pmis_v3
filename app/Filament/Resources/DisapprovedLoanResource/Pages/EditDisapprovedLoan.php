@@ -35,9 +35,8 @@ class EditDisapprovedLoan extends EditRecord
                 ])
                 ->action(function (array $data) {
                     $this->record->update([
-                        'approval_status'  => 'Pending Approval',
-                        'sub_status'       => 'none',
-                        'deficiency_notes' => null,
+                        'approval_status' => 'Pending Approval',
+                        'sub_status'      => 'none',
                     ]);
 
                     HandlesApprovalWorkflow::sendApprovalNotification($this->record, auth()->user());

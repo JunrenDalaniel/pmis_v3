@@ -159,19 +159,6 @@ class LoanApplication extends Model implements HasMedia
                 $loanApplication->status_changed_at = now();
             }
         });
-
-        static::saved(function (LoanApplication $loanApplication) {
-            if (filled($loanApplication->notes) && ($loanApplication->wasRecentlyCreated || $loanApplication->wasChanged('notes'))) {
-                $lastNote = $loanApplication->applicationNotes()->first();
-                if (! $lastNote || $lastNote->note !== $loanApplication->notes) {
-                    $loanApplication->applicationNotes()->create([
-                        'user_id' => auth()->id() ?? $loanApplication->created_by_user_id,
-                        'stage'   => $loanApplication->status ?? 'Initial Assessment',
-                        'note'    => $loanApplication->notes,
-                    ]);
-                }
-            }
-        });
     }
 
     public function member(): BelongsTo

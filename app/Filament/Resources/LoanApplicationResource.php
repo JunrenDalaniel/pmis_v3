@@ -508,65 +508,70 @@ class LoanApplicationResource extends Resource
                         ->required(),
                 ]),
 
-            // SECTION 2D: Evaluator Findings & Remarks (Serving as official deficiency & assessment notes)
-            'evaluator_notes_section' => Section::make('Evaluator Findings & Remarks')
-                ->description('Head Office deficiency findings, evaluation remarks, and compliance instructions')
-                ->icon('heroicon-o-pencil-square')
-                ->schema([
-                    Textarea::make('notes')
-                        ->label('Evaluation & Deficiency Remarks')
-                        ->placeholder('Specify missing requirements, discrepancy details, deficiency findings, or compliance instructions...')
-                        ->rows(4)
-                        ->autosize()
-                        ->disabled(fn () => (
-                            auth()->user()?->isBranchUser()
-                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
-                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
-                        ))
-                        ->dehydrated()
-                        ->helperText(fn () => (
-                            auth()->user()?->isBranchUser()
-                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
-                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
-                        ) ? '🔒 Official assessment and deficiency remarks are strictly managed by Head Office Evaluators.' : 'Official assessment & deficiency guidance for branch compliance.')
-                        ->columnSpanFull(),
-                ]),
-
-            // SECTION 2F: Comment / Conversation Thread
-            'comments_section' => Section::make('Comment / Conversation Thread')
-                ->description('Evaluation remarks, deficiency notes, and branch compliance thread')
+            // SECTION 2D: Unified Assessment & Communication Hub
+            'assessment_communication_section' => Section::make('Evaluation Remarks & Communication')
+                ->description('Official assessment findings, instructions, and conversation timeline')
                 ->icon('heroicon-o-chat-bubble-left-right')
-                ->collapsible()
-                ->collapsed()
-                ->compact()
-                ->visible(fn ($record) => filled($record?->id))
                 ->schema([
-                    Placeholder::make('notes_history_content')
-                        ->hiddenLabel()
-                        ->content(function ($record) {
-                            if (! $record) {
-                                return null;
-                            }
+                    Tabs::make('assessment_communication_tabs')
+                        ->tabs([
+                            Tab::make('Official Remarks')
+                                ->icon('heroicon-o-document-text')
+                                ->schema([
+                                    Textarea::make('notes')
+                                        ->label('Official Evaluator Findings & Instructions')
+                                        ->placeholder('Specify missing requirements, discrepancy details, deficiency findings, or compliance instructions...')
+                                        ->rows(6)
+                                        ->autosize()
+                                        ->disabled(fn () => (
+                                            auth()->user()?->isBranchUser()
+                                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
+                                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
+                                        ))
+                                        ->dehydrated()
+                                        ->helperText(fn () => (
+                                            auth()->user()?->isBranchUser()
+                                            || auth()->user()?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
+                                            || in_array(auth()->user()?->role?->code, ['mortgage_document_specialist', 'branch_manager'])
+                                        ) ? '🔒 Official assessment and deficiency remarks are strictly managed by Head Office Evaluators.' : 'Official assessment & deficiency guidance for branch compliance.')
+                                        ->columnSpanFull(),
+                                ]),
 
-                            $notes = $record->applicationNotes()->with(['user.role'])->oldest()->get();
+                            Tab::make('Conversation Thread')
+                                ->icon('heroicon-o-chat-bubble-bottom-center-text')
+                                ->badge(fn ($record) => $record?->applicationNotes()->count() ?: null)
+                                ->badgeColor('primary')
+                                ->visible(fn ($record) => filled($record?->id))
+                                ->schema([
+                                    Placeholder::make('notes_history_content')
+                                        ->hiddenLabel()
+                                        ->content(function ($record) {
+                                            if (! $record) {
+                                                return null;
+                                            }
 
-                            return new \Illuminate\Support\HtmlString(
-                                view('filament.components.comment-timeline', [
-                                    'notes'  => $notes,
-                                    'record' => $record,
-                                ])->render()
-                            );
-                        })
-                        ->columnSpanFull(),
+                                            $notes = $record->applicationNotes()->with(['user.role'])->oldest()->get();
 
-                    Textarea::make('branch_comment')
-                        ->label('Add Comment / Reply')
-                        ->placeholder('Type your comment, compliance update, or response here...')
-                        ->autosize()
-                        ->dehydrated(false)
-                        ->afterStateHydrated(fn (Textarea $component) => $component->state(''))
-                        ->helperText('💬 Comments entered here will be added to the conversation thread above upon saving.')
-                        ->columnSpanFull(),
+                                            return new \Illuminate\Support\HtmlString(
+                                                view('filament.components.comment-timeline', [
+                                                    'notes'  => $notes,
+                                                    'record' => $record,
+                                                ])->render()
+                                            );
+                                        })
+                                        ->columnSpanFull(),
+
+                                    Textarea::make('branch_comment')
+                                        ->label('Post Reply / Comment')
+                                        ->placeholder('Type your comment, compliance update, or response here...')
+                                        ->autosize()
+                                        ->rows(2)
+                                        ->dehydrated(false)
+                                        ->afterStateHydrated(fn (Textarea $component) => $component->state(''))
+                                        ->helperText('💬 Comments entered here will be added to the conversation thread above upon saving.')
+                                        ->columnSpanFull(),
+                                ]),
+                        ]),
                 ]),
 
             // Full original Loan Application Details section for Create Wizard & standard forms
@@ -1406,13 +1411,12 @@ class LoanApplicationResource extends Resource
                                                 $sections['collateral_summary_section'],
                                             ]),
 
-                                        // RIGHT COLUMN (5 of 12 columns): Workflow & Status, Evaluator Remarks, Comments
+                                        // RIGHT COLUMN (5 of 12 columns): Workflow & Status, Assessment Remarks & Conversation Hub
                                         Grid::make(1)
                                             ->columnSpan(['default' => 12, 'xl' => 5])
                                             ->schema([
                                                 $sections['workflow_status_section'],
-                                                $sections['evaluator_notes_section'],
-                                                $sections['comments_section'],
+                                                $sections['assessment_communication_section'],
                                             ]),
                                     ]),
                             ]),
@@ -1530,17 +1534,16 @@ class LoanApplicationResource extends Resource
                     ->required()
                     ->columnSpanFull(),
                 Textarea::make('disapproval_reason')
-                    ->label('Comment / Disapproval Reason')
+                    ->label('Official Remarks / Disapproval Reason')
                     ->placeholder('Specify the required corrections, missing documents, or disapproval reason...')
+                    ->default(fn (LoanApplication $record) => $record->notes)
                     ->required()
                     ->rows(5),
             ])
             ->action(function (LoanApplication $record, array $data, $livewire): void {
-                $currentNotes = $record->notes ? $record->notes . "\n\n" : '';
                 $record->approval_status = 'Disapproved';
                 $record->sub_status = $data['deficiency_type'] ?? 'none';
-                $record->deficiency_notes = $data['disapproval_reason'];
-                $record->notes = $currentNotes . "[DISAPPROVAL REASON - " . now()->format('F d, Y h:i A') . "]:\n" . $data['disapproval_reason'];
+                $record->notes = $data['disapproval_reason'];
                 $record->save();
 
                 // Send DB bell notification to current user + loan creator
@@ -1586,7 +1589,6 @@ class LoanApplicationResource extends Resource
             ->action(function (LoanApplication $record, array $data, $livewire): void {
                 $record->approval_status = 'Pending Approval';
                 $record->sub_status = 'none';
-                $record->deficiency_notes = null;
                 $record->save();
 
                 // Send DB bell notification to current user + loan creator
@@ -2249,7 +2251,7 @@ class LoanApplicationResource extends Resource
                         $record->status ?? 'Initial Assessment',
                         $agingText,
                         $deficiencyText,
-                        $record->deficiency_notes ?: ($record->notes ?: '—'),
+                        $record->notes ?: '—',
                         $record->loan_account_no ?? '—',
                         $record->date_granted ? $record->date_granted->format('F d, Y') : '—',
                         $record->maturity_date ? $record->maturity_date->format('F d, Y') : '—',
@@ -2383,7 +2385,8 @@ class LoanApplicationResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Date Filed')
-                    ->dateTime('F d, Y')
+                    ->date('m/d/Y')
+                    ->tooltip(fn (LoanApplication $record): ?string => $record->created_at?->format('F d, Y h:i A'))
                     ->sortable(),
                 Tables\Columns\TextColumn::make('application_no')
                     ->label('Application ID')
@@ -2530,8 +2533,7 @@ class LoanApplicationResource extends Resource
                     ->searchable()
                     ->placeholder('—')
                     ->description(function (LoanApplication $record): ?string {
-                        $defNotes = $record->deficiency_notes ?: ($record->notes ?: null);
-                        $shortNotes = $defNotes ? \Illuminate\Support\Str::limit($defNotes, 60) : 'Deficiency noted';
+                        $shortNotes = $record->notes ? \Illuminate\Support\Str::limit($record->notes, 60) : 'Deficiency noted';
                         if ($record->sub_status === 'internal_deficiency') {
                             return '🏢 Internal Deficiency: ' . $shortNotes;
                         } elseif ($record->sub_status === 'external_deficiency') {

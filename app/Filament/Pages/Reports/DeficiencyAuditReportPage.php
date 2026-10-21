@@ -274,7 +274,7 @@ class DeficiencyAuditReportPage extends Page implements HasTable
 
                 TextColumn::make('notes')
                     ->label('Assessment Notes')
-                    ->state(fn (LoanApplication $record) => $record->deficiency_notes ?: ($record->notes ?: 'Deficiency noted for compliance'))
+                    ->state(fn (LoanApplication $record) => $record->notes ?: 'Deficiency noted for compliance')
                     ->limit(60)
                     ->tooltip(fn ($state) => $state),
 
@@ -321,11 +321,11 @@ class DeficiencyAuditReportPage extends Page implements HasTable
                                 ])
                                 ->default(fn (LoanApplication $record) => $record->sub_status ?? 'internal_deficiency')
                                 ->required(),
-                            Textarea::make('deficiency_notes')
+                            Textarea::make('notes')
                                 ->label('Assessment Notes / Compliance Directives')
                                 ->rows(4)
                                 ->placeholder('Specify missing requirements, discrepancy details, or instructions...')
-                                ->default(fn (LoanApplication $record) => $record->deficiency_notes ?? $record->notes),
+                                ->default(fn (LoanApplication $record) => $record->notes),
                         ])
                         ->action(function (LoanApplication $record, array $data): void {
                             // Security: validate sub_status server-side — UI select alone is not enough
@@ -335,8 +335,8 @@ class DeficiencyAuditReportPage extends Page implements HasTable
                                 : 'internal_deficiency';
 
                             $record->update([
-                                'sub_status'       => $subStatus,
-                                'deficiency_notes' => $data['deficiency_notes'] ?? null,
+                                'sub_status' => $subStatus,
+                                'notes'      => $data['notes'] ?? $record->notes,
                             ]);
 
                             $this->generatePreview();

@@ -1,18 +1,14 @@
 @if (session('inactivity_message'))
-<div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/50 dark:border-amber-700/60 p-4 shadow-sm animate-fade-in">
-    <div class="flex items-start gap-3">
-        <div class="flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-            </svg>
+<div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(254, 243, 199, 0.9); color: #92400e; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); text-align: left;">
+    <svg style="width: 20px; height: 20px; min-width: 20px; min-height: 20px; flex-shrink: 0; color: #d97706; margin-top: 2px;" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+    </svg>
+    <div style="flex: 1;">
+        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #b45309;">
+            Session Timed Out / Natapos ang Session
         </div>
-        <div class="flex-1">
-            <h4 class="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300">
-                Session Timed Out / Natapos ang Session
-            </h4>
-            <p class="text-xs text-amber-700 dark:text-amber-300/90 mt-0.5 leading-relaxed">
-                {{ session('inactivity_message') }}
-            </p>
+        <div style="font-size: 12px; color: #78350f; margin-top: 3px; line-height: 1.45;">
+            {{ session('inactivity_message') }}
         </div>
     </div>
 </div>

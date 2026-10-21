@@ -207,7 +207,7 @@ class ReportExportService
                 $r->maturity_date ? Carbon::parse($r->maturity_date)->format('Y-m-d') : 'Pending',
                 $r->status ?? 'Approved',
                 $deficiencyText,
-                $r->deficiency_notes ?: ($r->notes ?: '—'),
+                $r->notes ?: '—',
             ];
         }
 
@@ -303,7 +303,7 @@ class ReportExportService
                 $daysAging,
                 $severity,
                 $deficiency,
-                $r->deficiency_notes ?: ($r->notes ?: '—'),
+                $r->notes ?: '—',
             ];
         }
 
@@ -625,7 +625,7 @@ class ReportExportService
             };
             $collateral = str_contains(strtolower((string) $r->collateral_type), 'real') || str_contains(strtolower((string) $r->collateral_type), 'rem') ? 'REM' : (str_contains(strtolower((string) $r->collateral_type), 'chattel') || str_contains(strtolower((string) $r->collateral_type), 'cm') ? 'CM' : strtoupper((string) $r->collateral_type));
 
-            $notes = $r->deficiency_notes ?: ($r->notes ?: 'Deficiency noted for compliance');
+            $notes = $r->notes ?: 'Deficiency noted for compliance';
 
             $rows[] = [
                 $index + 1,

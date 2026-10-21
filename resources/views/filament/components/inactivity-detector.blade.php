@@ -37,8 +37,8 @@
             class="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800/60 shadow-2xl p-6 text-center"
         >
             <!-- Animated Warning Icon -->
-            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 mb-4 ring-8 ring-amber-500/15 animate-pulse">
-                <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 mb-4 ring-8 ring-amber-500/15 animate-pulse" style="width: 64px; height: 64px;">
+                <svg style="width: 32px; height: 32px; min-width: 32px; min-height: 32px;" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
@@ -58,7 +58,7 @@
 
             <!-- Countdown Display -->
             <div class="my-5 inline-flex items-center gap-2.5 px-6 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 shadow-inner">
-                <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 animate-spin" style="animation-duration: 4s;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg style="width: 20px; height: 20px; min-width: 20px; min-height: 20px; animation-duration: 4s;" class="text-amber-600 dark:text-amber-400 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 <span class="text-3xl font-extrabold tabular-nums tracking-wider text-amber-700 dark:text-amber-300" x-text="formatCountdown(remainingSeconds)">
@@ -74,7 +74,7 @@
                     :disabled="isLoggingOut"
                     class="w-full inline-flex justify-center items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] shadow-lg shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
                 >
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                    <svg style="width: 20px; height: 20px; min-width: 20px; min-height: 20px;" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
                     Manatiling Naka-Login (Stay Logged In)

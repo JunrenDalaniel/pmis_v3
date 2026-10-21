@@ -57,9 +57,15 @@ trait HandlesApprovalWorkflow
 
         // ── Save branch_comment to notes history if provided ──────────────────
         if (filled($this->data['branch_comment'] ?? null)) {
+            $isBranch = $currentUser?->isBranchUser()
+                || $currentUser?->hasRole(['Mortgage Document Specialist', 'mortgage_document_specialist', 'Branch Manager', 'branch_manager'])
+                || in_array($currentUser?->role?->code, ['mortgage_document_specialist', 'branch_manager']);
+
+            $sourceLabel = $isBranch ? 'Branch Response' : 'HO Evaluator';
+
             $record->applicationNotes()->create([
                 'user_id' => $currentUser?->id ?? $record->created_by_user_id,
-                'stage'   => ($record->status ?? 'General') . ' (Branch Response)',
+                'stage'   => ($record->status ?? 'General') . " ({$sourceLabel})",
                 'note'    => $this->data['branch_comment'],
             ]);
             $this->data['branch_comment'] = '';

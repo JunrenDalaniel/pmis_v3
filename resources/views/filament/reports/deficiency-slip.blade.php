@@ -215,7 +215,7 @@
 
     <div class="notes-box">
         <div class="notes-heading">⚠️ Audit Findings & Assessment Notes:</div>
-        <div class="notes-content">{{ $record->deficiency_notes ?: ($record->notes ?: ($record->internal_deficiency_remarks ?: ($record->external_deficiency_remarks ?: 'No specific remarks recorded.'))) }}</div>
+        <div class="notes-content">{{ $record->notes ?: ($record->internal_deficiency_remarks ?: ($record->external_deficiency_remarks ?: 'No specific remarks recorded.')) }}</div>
     </div>
 
     <table class="signatures-table">
